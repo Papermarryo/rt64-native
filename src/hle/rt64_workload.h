@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "common/rt64_common.h"
 #include "render/rt64_buffer_uploader.h"
 #include "shared/rt64_extra_params.h"
 #include "shared/rt64_gpu_tile.h"
@@ -244,7 +245,7 @@ namespace RT64 {
         void updateOutputBuffers(RenderWorker *worker);
         void nextDrawDataRanges();
         void begin(uint64_t submissionFrame);
-        bool addFramebufferPair(uint32_t colorAddress, uint8_t colorFmt, uint8_t colorSiz, uint16_t colorWidth, uint32_t depthAddress);
+        bool addFramebufferPair(RDPAddress colorAddress, uint8_t colorFmt, uint8_t colorSiz, uint16_t colorWidth, RDPAddress depthAddress);
         int currentFramebufferPairIndex() const;
     };
 };

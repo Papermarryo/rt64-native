@@ -933,16 +933,28 @@ namespace RT64 {
         state->rdp->setOtherMode(otherMode.H, otherMode.L);
     }
 
-    void RSP::setColorImage(uint8_t fmt, uint8_t siz, uint16_t width, uint32_t segAddress) {
+    void RSP::setColorImage(uint8_t fmt, uint8_t siz, uint16_t width, RDPAddress segAddress) {
+#ifdef HOST_ADDRESS
+        state->rdp->setColorImage(fmt, siz, width, segAddress);
+#else
         state->rdp->setColorImage(fmt, siz, width, fromSegmented(segAddress));
+#endif
     }
 
-    void RSP::setDepthImage(uint32_t segAddress) {
+    void RSP::setDepthImage(RDPAddress segAddress) {
+#ifdef HOST_ADDRESS
+        state->rdp->setDepthImage(segAddress);
+#else
         state->rdp->setDepthImage(fromSegmented(segAddress));
+#endif
     }
 
-    void RSP::setTextureImage(uint8_t fmt, uint8_t siz, uint16_t width, uint32_t segAddress) {
+    void RSP::setTextureImage(uint8_t fmt, uint8_t siz, uint16_t width, RDPAddress segAddress) {
+#ifdef HOST_ADDRESS
+        state->rdp->setTextureImage(fmt, siz, width, segAddress);
+#else
         state->rdp->setTextureImage(fmt, siz, width, fromSegmented(segAddress));
+#endif
     }
 
     void RSP::drawIndexedTri(uint32_t a, uint32_t b, uint32_t c, bool rawGlobalIndices) {

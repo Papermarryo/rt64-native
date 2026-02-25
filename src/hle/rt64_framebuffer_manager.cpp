@@ -30,7 +30,7 @@ namespace RT64 {
 
     FramebufferManager::~FramebufferManager() { }
     
-    Framebuffer &FramebufferManager::get(uint32_t address, uint8_t siz, uint32_t width, uint32_t height) {
+    Framebuffer &FramebufferManager::get(RDPAddress address, uint8_t siz, uint32_t width, uint32_t height) {
         auto &fb = framebuffers[address];
         fb.widthChanged = (fb.width != width);
         fb.sizChanged = (fb.siz != siz);
@@ -51,7 +51,7 @@ namespace RT64 {
         return fb;
     }
 
-    Framebuffer *FramebufferManager::find(uint32_t address) const {
+    Framebuffer *FramebufferManager::find(RDPAddress address) const {
         auto it = framebuffers.find(address);
         if (it != framebuffers.end()) {
             return const_cast<Framebuffer *>(&it->second);
@@ -61,17 +61,15 @@ namespace RT64 {
         }
     }
     
-    Framebuffer *FramebufferManager::findMostRecentContaining(uint32_t addressStart, uint32_t addressEnd) {
+    Framebuffer *FramebufferManager::findMostRecentContaining(RDPAddress addressStart, RDPAddress addressEnd) {
         Framebuffer *mostRecent = nullptr;
         auto it = framebuffers.begin();
         while (it != framebuffers.end()) {
             if (it->second.overlaps(addressStart, addressEnd)) {
                 if (mostRecent != nullptr) {
-                    // Prioritize FBs with newer timestamps.
                     if (it->second.lastWriteTimestamp >= mostRecent->lastWriteTimestamp) {
                         mostRecent = &it->second;
                     }
-                    // Prioritize FBs that fully contain the range.
                     else if ((it->second.lastWriteTimestamp == mostRecent->lastWriteTimestamp) && (it->second.contains(addressStart, addressEnd) && !mostRecent->contains(addressStart, addressEnd))) {
                         mostRecent = &it->second;
                     }
@@ -375,13 +373,9 @@ namespace RT64 {
         cmdListReinterpretations.cmdListDispatches.emplace_back(dispatch);
     }
 
-    bool FramebufferManager::makeFramebufferTile(Framebuffer *fb, uint32_t addressStart, uint32_t addressEnd, uint32_t lineWidth, uint32_t tileHeight, FramebufferTile &outTile, bool RGBA32) {
+    bool FramebufferManager::makeFramebufferTile(Framebuffer *fb, RDPAddress addressStart, RDPAddress addressEnd, uint32_t lineWidth, uint32_t tileHeight, FramebufferTile &outTile, bool RGBA32) {
         assert(fb != nullptr);
 
-        // We need to figure out the best fitting tile from the address range specified and the TMEM Regions this tile must be stored on.
-        // The tile width and height parameters won't be 0 on load tile operations. They will however be 0 on load block operations.
-        
-        // If the starting address is lower than the framebuffer address, we move a row one by one according to the stride specified of the original image width.
         uint32_t tileRowStart = 0;
         uint32_t fbStride = fb->imageRowBytes(fb->width);
         while (addressStart < fb->addressStart) {
@@ -389,13 +383,11 @@ namespace RT64 {
             tileRowStart++;
         }
         
-        // We went over the allowed address range, a tile copy is impossible.
         if (addressStart >= fb->addressEnd) {
             return false;
         }
 
-        // Disallow the tile copy if the end address ended up below the starting address.
-        const uint32_t minEndAddress = std::min(addressEnd, fb->addressEnd);
+        const RDPAddress minEndAddress = std::min(addressEnd, fb->addressEnd);
         if (minEndAddress <= addressStart) {
             return false;
         }
@@ -439,7 +431,7 @@ namespace RT64 {
             outTile.bottom = outTile.top + tileHeight;
         }
         else {
-            const uint32_t rowEnd = std::max((addressEnd - addressStart) / rowBytes, 1U);
+            const uint32_t rowEnd = std::max(static_cast<uint32_t>((addressEnd - addressStart) / rowBytes), 1U);
             outTile.bottom = outTile.top + rowEnd;
 
             // Invalidate the tile if this is a loadBlock operation, more than one row is being loaded
@@ -502,14 +494,14 @@ namespace RT64 {
         return op;
     }
 
-    void FramebufferManager::insertRegionsTMEM(uint32_t addressStart, uint32_t tmemStart, uint32_t tmemWords, uint32_t tmemMask, bool RGBA32, bool syncRequired, std::vector<RegionIterator> *resultRegions) {
+    void FramebufferManager::insertRegionsTMEM(RDPAddress addressStart, uint32_t tmemStart, uint32_t tmemWords, uint32_t tmemMask, bool RGBA32, bool syncRequired, std::vector<RegionIterator> *resultRegions) {
         if (resultRegions != nullptr) {
             resultRegions->clear();
         }
 
         auto insertRegions = [&](bool upperTMEM) {
             RegionTMEM newRegion = { };
-            newRegion.fbTile.address = addressStart;
+            newRegion.fbTile.address = static_cast<uint32_t>(addressStart);
             newRegion.syncRequired = syncRequired;
 
             const uint32_t tmemAdd = upperTMEM ? (RDP_TMEM_WORDS >> 1) : 0;
@@ -770,7 +762,11 @@ namespace RT64 {
 
         auto it = framebuffers.begin();
         while (it != framebuffers.end()) {
+#ifdef HOST_ADDRESS
+            const uint8_t *fbRAM = reinterpret_cast<const uint8_t *>(it->first);
+#else
             const uint8_t *fbRAM = &RDRAM[it->first];
+#endif
             fbStorage.store(fbPairIndex, it->first, fbRAM, it->second.RAMBytes);
             it++;
         }
@@ -782,7 +778,11 @@ namespace RT64 {
         differentFbs.clear();
         auto it = framebuffers.begin();
         while (it != framebuffers.end()) {
+#ifdef HOST_ADDRESS
+            const uint8_t *fbRAM = reinterpret_cast<const uint8_t *>(it->first);
+#else
             const uint8_t *fbRAM = &RDRAM[it->first];
+#endif
             uint64_t currentHash = XXH3_64bits(fbRAM, it->second.RAMBytes);
             if (currentHash != it->second.RAMHash) {
                 differentFbs.push_back(&it->second);
@@ -797,7 +797,7 @@ namespace RT64 {
     }
 
     void FramebufferManager::uploadRAM(RenderWorker *renderWorker, Framebuffer **differentFbs, size_t differentFbsCount, FramebufferChangePool &fbChangePool,
-        const uint8_t *RDRAM, bool canDiscard, std::vector<FramebufferOperation> &fbOps, std::vector<uint32_t> &fbDiscards, const ShaderLibrary *shaderLibrary)
+        const uint8_t *RDRAM, bool canDiscard, std::vector<FramebufferOperation> &fbOps, std::vector<RDPAddress> &fbDiscards, const ShaderLibrary *shaderLibrary)
     {
         assert(renderWorker != nullptr);
         assert(RDRAM != nullptr);
@@ -807,7 +807,11 @@ namespace RT64 {
         size_t fbIndex = 0;
         for (size_t i = 0; i < differentFbsCount; i++) {
             Framebuffer *fb = differentFbs[i];
+#ifdef HOST_ADDRESS
+            const uint8_t *fbRAM = reinterpret_cast<const uint8_t *>(fb->addressStart);
+#else
             const uint8_t *fbRAM = &RDRAM[fb->addressStart];
+#endif
             const FramebufferChange::Type fbChangeType = (fb->lastWriteFmt == G_IM_FMT_DEPTH) ? FramebufferChange::Type::Depth : FramebufferChange::Type::Color;
             FramebufferChange &fbChange = fbChangePool.use(renderWorker, fbChangeType, fb->width, fb->height, shaderLibrary->usesHDR);
             const uint32_t DifferenceFractionNum = 1;
@@ -824,7 +828,7 @@ namespace RT64 {
             else {
                 FramebufferOperation changesOp;
                 changesOp.type = FramebufferOperation::Type::WriteChanges;
-                changesOp.writeChanges.address = fb->addressStart;
+                changesOp.writeChanges.address = static_cast<uint32_t>(fb->addressStart);
                 changesOp.writeChanges.id = fbChange.id;
                 fbOps.emplace_back(changesOp);
             }
@@ -846,14 +850,18 @@ namespace RT64 {
         auto it = framebuffers.begin();
         while (it != framebuffers.end()) {
             if ((it->second.maxHeight > 0) && (it->second.RAMBytes > 0)) {
+#ifdef HOST_ADDRESS
+                it->second.RAMHash = XXH3_64bits(reinterpret_cast<const uint8_t *>(it->first), it->second.RAMBytes);
+#else
                 it->second.RAMHash = XXH3_64bits(&RDRAM[it->first], it->second.RAMBytes);
+#endif
             }
 
             it++;
         }
     }
 
-    void FramebufferManager::changeRAM(Framebuffer *changedFb, uint32_t addressStart, uint32_t addressEnd) {
+    void FramebufferManager::changeRAM(Framebuffer *changedFb, RDPAddress addressStart, RDPAddress addressEnd) {
         assert(changedFb != nullptr);
 
         auto it = framebuffers.begin();
@@ -1007,8 +1015,8 @@ namespace RT64 {
         recordOperations(renderWorker, fbChangePool, fbStorage, shaderLibrary, textureCache, operations, targetManager, resolutionScale, maxFbPairIndex, submissionFrame);
     }
 
-    void FramebufferManager::performDiscards(const std::vector<uint32_t> &discards) {
-        for (uint32_t address : discards) {
+    void FramebufferManager::performDiscards(const std::vector<RDPAddress> &discards) {
+        for (RDPAddress address : discards) {
             auto it = framebuffers.find(address);
             if (it != framebuffers.end()) {
                 framebuffers.erase(it);

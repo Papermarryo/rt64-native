@@ -1332,8 +1332,13 @@ namespace RT64 {
                             uint32_t readRowBytes = colorFb->imageRowBytes(colorImg.width);
                             uint32_t readRowCount = colorFb->height - colorFb->readHeight;
                             uint32_t readFbBytes = readRowBytes * readRowCount;
-                            uint32_t storageAddress = colorImg.address + readRowBytes * colorFb->readHeight;
-                            workload.fbStorage.store(pairCursor, storageAddress, &RDRAM[storageAddress], readFbBytes);
+                            RDPAddress storageAddress = colorImg.address + readRowBytes * colorFb->readHeight;
+#ifdef HOST_ADDRESS
+                            const uint8_t *storageData = reinterpret_cast<const uint8_t *>(storageAddress);
+#else
+                            const uint8_t *storageData = &RDRAM[storageAddress];
+#endif
+                            workload.fbStorage.store(pairCursor, storageAddress, storageData, readFbBytes);
                             FramebufferChange *colorFbChange = colorFb->readChangeFromStorage(ext.framebufferGraphicsWorker, workload.fbStorage, scratchFbChangePool, Framebuffer::Type::Color,
                                 colorImg.fmt, pairCursor, colorFb->readHeight, readRowCount, ext.shaderLibrary);
 
@@ -1376,8 +1381,13 @@ namespace RT64 {
                                 uint32_t readRowBytes = depthFb->imageRowBytes(colorImg.width);
                                 uint32_t readRowCount = depthFb->height - depthFb->readHeight;
                                 uint32_t readFbBytes = readRowBytes * readRowCount;
-                                uint32_t storageAddress = depthImg.address + readRowBytes * depthFb->readHeight;
-                                workload.fbStorage.store(pairCursor, storageAddress, &RDRAM[storageAddress], readFbBytes);
+                                RDPAddress storageAddress = depthImg.address + readRowBytes * depthFb->readHeight;
+#ifdef HOST_ADDRESS
+                                const uint8_t *storageData = reinterpret_cast<const uint8_t *>(storageAddress);
+#else
+                                const uint8_t *storageData = &RDRAM[storageAddress];
+#endif
+                                workload.fbStorage.store(pairCursor, storageAddress, storageData, readFbBytes);
                                 FramebufferChange *depthFbChange = depthFb->readChangeFromStorage(ext.framebufferGraphicsWorker, workload.fbStorage, scratchFbChangePool, Framebuffer::Type::Depth,
                                     G_IM_FMT_DEPTH, pairCursor, depthFb->readHeight, readRowCount, ext.shaderLibrary);
 
@@ -1424,11 +1434,19 @@ namespace RT64 {
                 pairCursor = framebufferPairCursor;
                 while (pairCursor < maxFramebufferPair) {
                     if (getFramebufferPairs(pairCursor)) {
+#ifdef HOST_ADDRESS
+                        colorFb->copyNativeToRAM(reinterpret_cast<uint8_t *>(colorFb->addressStart), colorWriteWidth, colorRowStart, std::min(colorRowEnd, colorFb->height));
+
+                        if (depthWriteWidth > 0) {
+                            depthFb->copyNativeToRAM(reinterpret_cast<uint8_t *>(depthFb->addressStart), depthWriteWidth, depthRowStart, std::min(depthRowEnd, depthFb->height));
+                        }
+#else
                         colorFb->copyNativeToRAM(&RDRAM[colorFb->addressStart], colorWriteWidth, colorRowStart, std::min(colorRowEnd, colorFb->height));
 
                         if (depthWriteWidth > 0) {
                             depthFb->copyNativeToRAM(&RDRAM[depthFb->addressStart], depthWriteWidth, depthRowStart, std::min(depthRowEnd, depthFb->height));
                         }
+#endif
                     }
 
                     pairCursor++;
@@ -1749,7 +1767,7 @@ namespace RT64 {
 
                 for (size_t h = 0; (h < viHistory.history.size()) && !viPresented; h++) {
                     const VIHistory::Present &entry = viHistory.history[h];
-                    const uint32_t fbAddress = entry.vi.fbAddress();
+                    const RDPAddress fbAddress = entry.vi.fbAddress();
                     const hlslpp::uint2 fbSize = entry.vi.fbSize();
                     const uint8_t fbSiz = entry.vi.fbSiz();
                     if ((colorImg.address == fbAddress) &&
@@ -1811,7 +1829,7 @@ namespace RT64 {
         present.storage.clear();
 
         const bool presentEarly = !ext.presentQueue->viewRDRAM && (ext.enhancementConfig->presentation.mode == EnhancementConfiguration::Presentation::Mode::PresentEarly);
-        const uint32_t screenFbAddress = newVI.fbAddress();
+        const RDPAddress screenFbAddress = newVI.fbAddress();
         const hlslpp::uint2 screenFbSize = newVI.fbSize();
         const uint8_t screenFbSiz = newVI.fbSiz();
         const bool viVisible = newVI.visible();
@@ -1847,15 +1865,17 @@ namespace RT64 {
             RenderWorker *worker = ext.framebufferGraphicsWorker;
             Framebuffer *screenFb = framebufferManager.find(screenFbAddress);
             if (screenFb != nullptr) {
-                // Check compatibility of the high resolution framebuffer with the VI first.
-                // Ensure both the siz and width are the same.
                 if ((screenFbSize.x == screenFb->width) && (screenFbSiz == screenFb->siz)) {
+#ifdef HOST_ADDRESS
+                    const uint8_t *fbRAM = reinterpret_cast<const uint8_t *>(screenFb->addressStart);
+#else
                     const uint8_t *fbRAM = &RDRAM[screenFb->addressStart];
+#endif
                     uint64_t currentHash = XXH3_64bits(fbRAM, screenFb->RAMBytes);
                     if (currentHash != screenFb->RAMHash) {
                         {
                             RenderWorkerExecution workerExecution(worker);
-                            thread_local std::vector<uint32_t> fbDiscards;
+                            thread_local std::vector<RDPAddress> fbDiscards;
                             const std::scoped_lock lock(ext.presentQueue->screenFbChangePoolMutex);
                             framebufferManager.uploadRAM(worker, &screenFb, 1, ext.presentQueue->screenFbChangePool, RDRAM, false, present.fbOperations, fbDiscards, ext.shaderLibrary);
                             fbDiscards.clear();
@@ -1884,9 +1904,15 @@ namespace RT64 {
             if (screenFbSiz >= G_IM_SIZ_16b) {
                 uint32_t screenFbBytes = uint32_t(screenFbSize.x * screenFbSize.y) << (screenFbSiz - 1);
                 present.storage.resize(screenFbBytes);
+#ifdef HOST_ADDRESS
+                memcpy(present.storage.data(), reinterpret_cast<const uint8_t *>(screenFbAddress), screenFbBytes);
+#else
                 memcpy(present.storage.data(), &RDRAM[screenFbAddress], screenFbBytes);
+#endif
+                
                 uint64_t newScreenHash = XXH3_64bits(present.storage.data(), screenFbBytes);
                 screenChangesMade = (newScreenHash != lastScreenHash);
+
                 lastScreenHash = newScreenHash;
             }
         }

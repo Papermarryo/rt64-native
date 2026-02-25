@@ -7,6 +7,7 @@
 #include <cassert>
 
 #include "../include/rt64_extended_gbi.h"
+#include "common/rt64_common.h"
 
 #include "rt64_f3d.h"
 #include "rt64_gbi_extended.h"
@@ -78,8 +79,12 @@ namespace RT64 {
                 state->pushReturnAddress(*dl);
             }
 
+#ifdef HOST_ADDRESS
+            *dl = reinterpret_cast<DisplayList *>((*dl)->w1) - 1;
+#else
             const uint32_t rdramAddress = state->rsp->fromSegmentedMasked((*dl)->w1);
             *dl = reinterpret_cast<DisplayList *>(state->fromRDRAM(rdramAddress)) - 1;
+#endif
         }
 
         void endDl(State *state, DisplayList **dl) {
@@ -206,12 +211,12 @@ namespace RT64 {
             const uint8_t fmt = (*dl)->p0(21, 3);
             const uint8_t siz = (*dl)->p0(19, 2);
             const uint16_t width = (*dl)->p0(0, 12) + 1;
-            const uint32_t address = (*dl)->w1;
+            const RDPAddress address = static_cast<RDPAddress>((*dl)->w1);
             state->rsp->setColorImage(fmt, siz, width, address);
         }
 
         void setDepthImage(State *state, DisplayList **dl) {
-            const uint32_t address = (*dl)->w1;
+            const RDPAddress address = static_cast<RDPAddress>((*dl)->w1);
             state->rsp->setDepthImage(address);
         }
 
@@ -219,7 +224,7 @@ namespace RT64 {
             const uint8_t fmt = (*dl)->p0(21, 3);
             const uint8_t siz = (*dl)->p0(19, 2);
             const uint16_t width = (*dl)->p0(0, 12) + 1;
-            const uint32_t address = (*dl)->w1;
+            const RDPAddress address = static_cast<RDPAddress>((*dl)->w1);
             state->rsp->setTextureImage(fmt, siz, width, address);
         }
 

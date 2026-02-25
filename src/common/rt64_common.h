@@ -19,7 +19,14 @@
 #   define CPPDLLEXPORT __attribute__((visibility("default")))
 #endif
 
+#include <cstdint>
+
 namespace RT64 {
+#ifdef HOST_ADDRESS
+    typedef uintptr_t RDPAddress;
+#else
+    typedef uint32_t RDPAddress;
+#endif
     enum class UpscaleMode {
         Bilinear,
         FSR,
@@ -40,14 +47,22 @@ namespace RT64 {
 #   define RT64_LOG_PRINTF(x, ...)
 #else
     extern FILE *GlobalLogFile;
-#   ifdef _WIN32
-#       define RT64_LOG_OPEN(x) do { RT64::GlobalLogFile = _wfopen(x, L"wt"); } while (0)
-#   else
-#       define RT64_LOG_OPEN(x) do { RT64::GlobalLogFile = fopen(x, "w"); } while (0)
-#   endif
-#   define RT64_LOG_CLOSE() do { fclose(RT64::GlobalLogFile); } while (0)
-#   define RT64_LOG_PRINTF(x, ...) do { fprintf(RT64::GlobalLogFile, x, ## __VA_ARGS__); fprintf(RT64::GlobalLogFile, "\n"); fflush(RT64::GlobalLogFile); } while (0)
-#   define RT64_LOG_PRINTF_DETAILED(x, ...) do { fprintf(RT64::GlobalLogFile, x, ## __VA_ARGS__); fprintf(RT64::GlobalLogFile, " (%s in %s:%d)\n", __FUNCTION__, __FILE__, __LINE__); fflush(RT64::GlobalLogFile); } while (0)
+    //#define CONSOLE_LOG
+    #ifdef CONSOLE_LOG
+#       define RT64_LOG_OPEN(x)
+#       define RT64_LOG_CLOSE()
+#       define RT64_LOG_PRINTF(x, ...) do { fprintf(stdout, x, ## __VA_ARGS__); fprintf(stdout, "\n"); fflush(stdout); } while (0)
+#       define RT64_LOG_PRINTF_DETAILED(x, ...) do { fprintf(stdout, x, ## __VA_ARGS__); fprintf(stdout, " (%s in %s:%d)\n", __FUNCTION__, __FILE__, __LINE__); fflush(stdout); } while (0)
+    #else
+#       ifdef _WIN32
+#           define RT64_LOG_OPEN(x) do { RT64::GlobalLogFile = _wfopen(x, L"wt"); } while (0)
+#       else
+#           define RT64_LOG_OPEN(x) do { RT64::GlobalLogFile = fopen(x, "w"); } while (0)
+#       endif
+#       define RT64_LOG_CLOSE() do { fclose(RT64::GlobalLogFile); } while (0)
+#       define RT64_LOG_PRINTF(x, ...) do { fprintf(RT64::GlobalLogFile, x, ## __VA_ARGS__); fprintf(RT64::GlobalLogFile, "\n"); fflush(RT64::GlobalLogFile); } while (0)
+#       define RT64_LOG_PRINTF_DETAILED(x, ...) do { fprintf(RT64::GlobalLogFile, x, ## __VA_ARGS__); fprintf(RT64::GlobalLogFile, " (%s in %s:%d)\n", __FUNCTION__, __FILE__, __LINE__); fflush(RT64::GlobalLogFile); } while (0)
+    #endif
 #endif
 
     inline float HaltonSequence(int i, int b) {

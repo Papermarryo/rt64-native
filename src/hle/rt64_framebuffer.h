@@ -7,6 +7,7 @@
 #include <array>
 #include <stdint.h>
 
+#include "common/rt64_common.h"
 #include "render/rt64_native_target.h"
 
 #include "rt64_framebuffer_changes.h"
@@ -22,8 +23,8 @@ namespace RT64 {
             Depth
         };
 
-        uint32_t addressStart;
-        uint32_t addressEnd;
+        RDPAddress addressStart;
+        RDPAddress addressEnd;
         uint8_t siz;
         uint32_t width;
         uint32_t height;
@@ -48,8 +49,8 @@ namespace RT64 {
         Framebuffer();
         ~Framebuffer();
         uint32_t imageRowBytes(uint32_t rowWidth) const;
-        bool contains(uint32_t start, uint32_t end) const;
-        bool overlaps(uint32_t start, uint32_t end) const;
+        bool contains(RDPAddress start, RDPAddress end) const;
+        bool overlaps(RDPAddress start, RDPAddress end) const;
         void discardLastWrite();
         bool isLastWriteDifferent(Framebuffer::Type newType) const;
         uint32_t copyRAMToNativeAndChanges(RenderWorker *worker, FramebufferChange &fbChange, const uint8_t *src, uint32_t rowStart, uint32_t rowCount, uint8_t fmt, bool invalidateTargets, const ShaderLibrary *shaderLibrary);

@@ -280,7 +280,7 @@ namespace RT64 {
         this->submissionFrame = submissionFrame;
     }
 
-    bool Workload::addFramebufferPair(uint32_t colorAddress, uint8_t colorFmt, uint8_t colorSiz, uint16_t colorWidth, uint32_t depthAddress) {
+    bool Workload::addFramebufferPair(RDPAddress colorAddress, uint8_t colorFmt, uint8_t colorSiz, uint16_t colorWidth, RDPAddress depthAddress) {
         uint32_t fbPairIndex;
         bool addedPair = false;
         if ((fbPairCount == 0) || !fbPairs[fbPairCount - 1].isEmpty()) {

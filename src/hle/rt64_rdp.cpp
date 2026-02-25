@@ -130,7 +130,7 @@ namespace RT64 {
         }
     }
     
-    void RDP::checkFramebufferOverlap(uint32_t tmemStart, uint32_t tmemWords, uint32_t tmemMask, uint32_t addressStart, uint32_t addressEnd, uint32_t tileWidth, uint32_t tileHeight, bool RGBA32, bool makeTileCopy) {
+    void RDP::checkFramebufferOverlap(uint32_t tmemStart, uint32_t tmemWords, uint32_t tmemMask, RDPAddress addressStart, RDPAddress addressEnd, uint32_t tileWidth, uint32_t tileHeight, bool RGBA32, bool makeTileCopy) {
         auto &fbManager = state->framebufferManager;
         Framebuffer *fb = fbManager.findMostRecentContaining(addressStart, addressEnd);
         if (fb != nullptr) {
@@ -142,35 +142,30 @@ namespace RT64 {
             FramebufferTile fbTile;
             bool couldMakeTile = false;
             if (makeTileCopy) {
-                // Find the best possible fitting GPU copy to store in this TMEM region.
                 couldMakeTile = fbManager.makeFramebufferTile(fb, addressStart, addressEnd, tileWidth, tileHeight, fbTile, RGBA32);
             }
 
-            // Always tags regions in TMEM, regardless of whether it's possible to make a copy or not.
-            uint32_t fbEnd = fb->addressStart + fb->imageRowBytes(fb->width) * fb->maxHeight;
+            RDPAddress fbEnd = fb->addressStart + fb->imageRowBytes(fb->width) * fb->maxHeight;
             bool syncRequired = (fb->addressStart < addressEnd) && (fbEnd > addressStart);
             fbManager.insertRegionsTMEM(fb->addressStart, tmemStart, std::min(tmemWords, uint32_t(RDP_TMEM_WORDS)), tmemMask, RGBA32, syncRequired, couldMakeTile ? &regionIterators : nullptr);
 
             if (couldMakeTile) {
-                // Make a new tile copy resource.
                 const uint32_t newTileWidth = fbTile.right - fbTile.left;
                 const uint32_t newTileHeight = fbTile.bottom - fbTile.top;
                 uint64_t newTileId = fbManager.findTileCopyId(newTileWidth, newTileHeight);
 
-                // If valid, store the FB tile and the copy ID in the relevant regions.
                 for (FramebufferManager::RegionIterator regionIt : regionIterators) {
                     regionIt->fbTile = fbTile;
                     regionIt->tileCopyId = newTileId;
                 }
                 
-                // Queue the operation to make the tile copy.
                 FramebufferOperation fbOp = fbManager.makeTileCopyTMEM(newTileId, fbTile);
                 state->drawFbOperations.emplace_back(fbOp);
             }
         }
     }
     
-    void RDP::checkImageOverlap(uint32_t addressStart, uint32_t addressEnd) {
+    void RDP::checkImageOverlap(RDPAddress addressStart, RDPAddress addressEnd) {
         const int workloadCursor = state->ext.workloadQueue->writeCursor;
         Workload &workload = state->ext.workloadQueue->workloads[workloadCursor];
         FramebufferPair &fbPair = workload.fbPairs[workload.currentFramebufferPairIndex()];
@@ -183,8 +178,8 @@ namespace RT64 {
         const uint32_t colorRowStart = colorRect.top(false);
         const uint32_t colorRowEnd = colorRect.bottom(true);
         const uint32_t colorBpr = imageWidth << fbPair.colorImage.siz >> 1;
-        const uint32_t colorStart = fbPair.colorImage.address + colorRowStart * colorBpr;
-        const uint32_t colorEnd = colorStart + (colorRowEnd - colorRowStart) * colorBpr;
+        const RDPAddress colorStart = fbPair.colorImage.address + colorRowStart * colorBpr;
+        const RDPAddress colorEnd = colorStart + (colorRowEnd - colorRowStart) * colorBpr;
         bool overlapDetected = false;
         if ((addressStart < colorEnd) && (addressEnd > colorStart)) {
             colorImage.changed = true;
@@ -199,8 +194,8 @@ namespace RT64 {
             const uint32_t depthRowStart = depthRect.top(false);
             const uint32_t depthRowEnd = depthRect.bottom(true);
             const uint32_t depthBpr = imageWidth << G_IM_SIZ_16b >> 1;
-            const uint32_t depthStart = fbPair.depthImage.address + depthRowStart * depthBpr;
-            const uint32_t depthEnd = depthStart + (depthRowEnd - depthRowStart) * depthBpr;
+            const RDPAddress depthStart = fbPair.depthImage.address + depthRowStart * depthBpr;
+            const RDPAddress depthEnd = depthStart + (depthRowEnd - depthRowStart) * depthBpr;
             if ((addressStart < depthEnd) && (addressEnd > depthStart)) {
                 depthImage.changed = true;
                 overlapDetected = true;
@@ -223,20 +218,29 @@ namespace RT64 {
     };
 
     constexpr uint32_t ExtendedMask = 0x80000000U;
+    constexpr uint64_t N64AddressMask = 0xFFFFFFFF00000000ULL;
 
-    uint32_t RDP::maskAddress(uint32_t address) {
+    RDPAddress RDP::maskAddress(RDPAddress address) {
+#ifdef HOST_ADDRESS
+        if ((address & N64AddressMask) == 0 && (address & ExtendedMask) == ExtendedMask) {
+            uint32_t offset = address & RDP_ADDRESS_MASK;
+            fprintf(stderr, "maskAddress N64->HOST: input=0x%lx, offset=0x%x, RDRAM=%p, result=%p\n",
+                    (unsigned long)address, offset, (void*)state->RDRAM, (void*)(state->RDRAM + offset));
+            return reinterpret_cast<RDPAddress>(state->RDRAM + offset);
+        }
+        return address;
+#else
         if (state->extended.extendRDRAM && ((address & ExtendedMask) == ExtendedMask)) {
             return address - ExtendedMask;
         }
         else {
             return address & RDP_ADDRESS_MASK;
         }
+#endif
     }
 
-    void RDP::setColorImage(uint8_t fmt, uint8_t siz, uint16_t width, uint32_t address) {
-        // Make sure the new color image is actually different. Some games will set the color image
-        // multiple times despite setting the exact same parameters.
-        const uint32_t newAddress = maskAddress(address);
+    void RDP::setColorImage(uint8_t fmt, uint8_t siz, uint16_t width, RDPAddress address) {
+        const RDPAddress newAddress = maskAddress(address);
         if ((colorImage.fmt != fmt) ||
             (colorImage.siz != siz) ||
             (colorImage.width != width) ||
@@ -249,24 +253,24 @@ namespace RT64 {
             colorImage.changed = true;
 
 #       ifdef LOG_COLOR_DEPTH_IMAGE_METHODS
-            RT64_LOG_PRINTF("RDP::setColorImage(fmt %u, siz %u, width %u, address 0x%08X)", fmt, siz, width, address);
+            RT64_LOG_PRINTF("RDP::setColorImage(fmt %u, siz %u, width %u, address 0x%08X)", fmt, siz, width, (uint32_t)address);
 #       endif
         }
     }
 
-    void RDP::setDepthImage(uint32_t address) {
-        const uint32_t newAddress = maskAddress(address);
+    void RDP::setDepthImage(RDPAddress address) {
+        const RDPAddress newAddress = maskAddress(address);
         if (depthImage.address != newAddress) {
             depthImage.address = newAddress;
             depthImage.changed = true;
 
 #       ifdef LOG_COLOR_DEPTH_IMAGE_METHODS
-            RT64_LOG_PRINTF("RDP::setDepthImage(address 0x%08X)", address);
+            RT64_LOG_PRINTF("RDP::setDepthImage(address 0x%08X)", (uint32_t)address);
 #       endif
         }
     }
 
-    void RDP::setTextureImage(uint8_t fmt, uint8_t siz, uint16_t width, uint32_t address) {
+    void RDP::setTextureImage(uint8_t fmt, uint8_t siz, uint16_t width, RDPAddress address) {
         texture.fmt = fmt;
         texture.siz = siz;
         texture.width = width;
@@ -274,7 +278,7 @@ namespace RT64 {
         state->updateDrawStatusAttribute(DrawAttribute::Texture);
 
 #   ifdef LOG_TEXTURE_IMAGE_METHODS
-        RT64_LOG_PRINTF("RDP::setTextureImage(fmt %u, siz %u, width %u, address 0x%08X)", fmt, siz, width, address);
+        RT64_LOG_PRINTF("RDP::setTextureImage(fmt %u, siz %u, width %u, address 0x%08X)", fmt, siz, width, (uint32_t)address);
 #   endif
     }
 
@@ -348,7 +352,7 @@ namespace RT64 {
     }
     
     template<bool RGBA32 = false, bool TLUT = false>
-    __forceinline void loadWord(uint8_t *TMEM, uint32_t tmemAddress, uint32_t tmemXorMask, const uint8_t *RDRAM, uint32_t textureAddress) {
+    __forceinline void loadWord(uint8_t *TMEM, uint32_t tmemAddress, uint32_t tmemXorMask, const uint8_t *RDRAM, RDPAddress textureAddress) {
         // Only sample the first two bytes in TLUT mode.
         uint32_t offsetMask;
         if constexpr (TLUT) {
@@ -361,6 +365,17 @@ namespace RT64 {
         if constexpr (RGBA32) {
             // Split the lower and upper half of the word into the lower and upper half of TMEM.
             const uint32_t UpperTMEM = (RDP_TMEM_BYTES >> 1);
+#ifdef HOST_ADDRESS
+            const uint8_t *texturePtr = reinterpret_cast<const uint8_t *>(textureAddress);
+            TMEM[(tmemAddress + 0) ^ tmemXorMask] = texturePtr[(0 & offsetMask) ^ 3];
+            TMEM[(tmemAddress + 1) ^ tmemXorMask] = texturePtr[(1 & offsetMask) ^ 3];
+            TMEM[(tmemAddress + 2) ^ tmemXorMask] = texturePtr[(4 & offsetMask) ^ 3];
+            TMEM[(tmemAddress + 3) ^ tmemXorMask] = texturePtr[(5 & offsetMask) ^ 3];
+            TMEM[((tmemAddress + 0) ^ tmemXorMask) | UpperTMEM] = texturePtr[(2 & offsetMask) ^ 3];
+            TMEM[((tmemAddress + 1) ^ tmemXorMask) | UpperTMEM] = texturePtr[(3 & offsetMask) ^ 3];
+            TMEM[((tmemAddress + 2) ^ tmemXorMask) | UpperTMEM] = texturePtr[(6 & offsetMask) ^ 3];
+            TMEM[((tmemAddress + 3) ^ tmemXorMask) | UpperTMEM] = texturePtr[(7 & offsetMask) ^ 3];
+#else
             TMEM[(tmemAddress + 0) ^ tmemXorMask] = RDRAM[(textureAddress + (0 & offsetMask)) ^ 3];
             TMEM[(tmemAddress + 1) ^ tmemXorMask] = RDRAM[(textureAddress + (1 & offsetMask)) ^ 3];
             TMEM[(tmemAddress + 2) ^ tmemXorMask] = RDRAM[(textureAddress + (4 & offsetMask)) ^ 3];
@@ -369,23 +384,32 @@ namespace RT64 {
             TMEM[((tmemAddress + 1) ^ tmemXorMask) | UpperTMEM] = RDRAM[(textureAddress + (3 & offsetMask)) ^ 3];
             TMEM[((tmemAddress + 2) ^ tmemXorMask) | UpperTMEM] = RDRAM[(textureAddress + (6 & offsetMask)) ^ 3];
             TMEM[((tmemAddress + 3) ^ tmemXorMask) | UpperTMEM] = RDRAM[(textureAddress + (7 & offsetMask)) ^ 3];
+#endif
         }
         else {
             // Copy the entire word.
+#ifdef HOST_ADDRESS
+            const uint8_t *texturePtr = reinterpret_cast<const uint8_t *>(textureAddress);
+            for (uint32_t i = 0; i < 8; i++) {
+                TMEM[(tmemAddress + i) ^ tmemXorMask] = texturePtr[(i & offsetMask) ^ 3];
+            }
+#else
             for (uint32_t i = 0; i < 8; i++) {
                 TMEM[(tmemAddress + i) ^ tmemXorMask] = RDRAM[(textureAddress + (i & offsetMask)) ^ 3];
             }
+#endif
         }
     }
 
     template<bool RGBA32 = false, bool BLOCK = false, bool TLUT = false>
-    __forceinline void loadToTMEMCommon(uint8_t *TMEM, const uint8_t *RDRAM, uint32_t textureStart, uint32_t textureStride, uint32_t tmemStart,
+    __forceinline void loadToTMEMCommon(uint8_t *TMEM, const uint8_t *RDRAM, RDPAddress textureStart, uint32_t textureStride, uint32_t tmemStart,
         uint32_t tmemStride, uint32_t wordsPerRow, uint32_t rowCount, uint32_t dxtIncrement = 0)
     {
         assert((!BLOCK || (rowCount == 1)) && "Load block must behave as if it only loads one row of data.");
         
         const uint32_t DXTSwap = 0x800;
-        uint32_t textureAddress, tmemAddress, wordCount, tmemMask, tmemAdvance;
+        RDPAddress textureAddress;
+        uint32_t tmemAddress, wordCount, tmemMask, tmemAdvance;
         if constexpr (RGBA32) {
             tmemMask = RDP_TMEM_MASK16;
             tmemAdvance = 0x4;
@@ -419,7 +443,7 @@ namespace RT64 {
             tmemAddress = (tmemAddress + tmemAdvance) & tmemMask;
         };
         
-        uint32_t textureAddressRow = textureStart;
+        RDPAddress textureAddressRow = textureStart;
         uint32_t tmemAddressRow = tmemStart & tmemMask;
         auto loadRowStep = [&]() {
             tmemAddressRow = (tmemAddressRow + tmemStride) & tmemMask;
@@ -445,13 +469,13 @@ namespace RT64 {
     void RDP::loadTileOperation(const LoadTile &loadTile, const LoadTexture &loadTexture, bool deferred) {
         const uint32_t bytesOffset = (loadTile.uls >> 2) << loadTexture.siz >> 1;
         const uint32_t bytesPerRow = loadTexture.width << loadTexture.siz >> 1;
-        const uint32_t textureStart = loadTexture.address + bytesOffset + bytesPerRow * (loadTile.ult >> 2);
+        const RDPAddress textureStart = loadTexture.address + bytesOffset + bytesPerRow * (loadTile.ult >> 2);
         const uint32_t rowCount = 1 + ((loadTile.lrt >> 2) - (loadTile.ult >> 2));
         const uint32_t tileWidth = ((loadTile.lrs >> 2) - (loadTile.uls >> 2));
         const uint32_t wordsPerRow = (tileWidth >> (4 - loadTile.siz)) + 1;
         const uint32_t tmemStart = loadTile.tmem << 3;
         const uint32_t tmemStride = loadTile.line << 3;
-        const uint32_t textureEnd = textureStart + (rowCount - 1) * bytesPerRow + (wordsPerRow << 3);
+        const RDPAddress textureEnd = textureStart + (rowCount - 1) * bytesPerRow + (wordsPerRow << 3);
         const bool RGBA32 = (loadTile.siz == G_IM_SIZ_32b) && (loadTile.fmt == G_IM_FMT_RGBA);
         if (deferred) {
             checkImageOverlap(textureStart, textureEnd);
@@ -485,11 +509,11 @@ namespace RT64 {
         // Deduce loading parameters for block and the texture address.
         const uint32_t bytesOffset = loadTile.uls << loadTexture.siz >> 1;
         const uint32_t bytesPerRow = loadTexture.width << loadTexture.siz >> 1;
-        const uint32_t textureStart = loadTexture.address + bytesOffset + bytesPerRow * loadTile.ult;
+        const RDPAddress textureStart = loadTexture.address + bytesOffset + bytesPerRow * loadTile.ult;
         const uint32_t wordCount = ((loadTile.lrs - loadTile.uls) >> (4 - loadTile.siz)) + 1;
         const uint32_t tmemStart = loadTile.tmem << 3;
         const uint32_t tmemStride = loadTile.line << 3;
-        const uint32_t textureEnd = textureStart + (wordCount << 3);
+        const RDPAddress textureEnd = textureStart + (wordCount << 3);
         const bool RGBA32 = (loadTile.siz == G_IM_SIZ_32b) && (loadTile.fmt == G_IM_FMT_RGBA);
         if (deferred) {
             checkImageOverlap(textureStart, textureEnd);
@@ -521,15 +545,14 @@ namespace RT64 {
         // Deduce loading parameters for TLUT and the texture address.
         const uint32_t bytesOffset = (loadTile.uls >> 2) << loadTexture.siz >> 1;
         const uint32_t bytesPerRow = loadTexture.width << loadTexture.siz >> 1;
-        const uint32_t textureStart = loadTexture.address + bytesOffset + bytesPerRow * (loadTile.ult >> 2);
+        const RDPAddress textureStart = loadTexture.address + bytesOffset + bytesPerRow * (loadTile.ult >> 2);
         const uint32_t rowCount = 1 + ((loadTile.lrt >> 2) - (loadTile.ult >> 2));
         const uint32_t wordsPerRow = ((loadTile.lrs >> 2) - (loadTile.uls >> 2)) + 1;
         const uint32_t tmemStart = loadTile.tmem << 3;
         const uint32_t tmemStride = loadTile.line << 5;
         const bool RGBA32 = (loadTile.siz == G_IM_SIZ_32b) && (loadTile.fmt == G_IM_FMT_RGBA);
         if (deferred) {
-            // Flush current framebuffer pair if any of the images being written to are loaded by this TLUT.
-            const uint32_t textureEnd = textureStart + (rowCount - 1) * bytesPerRow + (wordsPerRow << 3);
+            const RDPAddress textureEnd = textureStart + (rowCount - 1) * bytesPerRow + (wordsPerRow << 3);
             checkImageOverlap(textureStart, textureEnd);
 
             // Discard any FB regions currently loaded into TMEM within the specified range.
@@ -634,12 +657,12 @@ namespace RT64 {
         const auto &t = tiles[tile];
         const uint32_t bytesOffset = (uls >> 2) << texture.siz >> 1;
         const uint32_t bytesPerRow = texture.width << texture.siz >> 1;
-        const uint32_t textureStart = texture.address + bytesOffset + bytesPerRow * (ult >> 2);
+        const RDPAddress textureStart = texture.address + bytesOffset + bytesPerRow * (ult >> 2);
         const uint32_t rowCount = 1 + ((lrt >> 2) - (ult >> 2));
         const uint32_t tileWidth = ((lrs >> 2) - (uls >> 2));
         const uint32_t wordsPerRow = (tileWidth >> (4 - t.siz)) + 1;
         const uint32_t textureSize = (rowCount - 1) * bytesPerRow + (wordsPerRow << 3);
-        const uint32_t textureEnd = textureStart + textureSize;
+        const RDPAddress textureEnd = textureStart + textureSize;
         checkImageOverlap(textureStart, textureEnd);
 
         Framebuffer *framebuffer = state->framebufferManager.findMostRecentContaining(textureStart, textureEnd);
@@ -666,16 +689,19 @@ namespace RT64 {
         const auto &t = tiles[tile];
         const uint32_t bytesOffset = (uls >> 2) << texture.siz >> 1;
         const uint32_t bytesPerRow = texture.width << texture.siz >> 1;
-        const uint32_t textureStart = texture.address + bytesOffset + bytesPerRow * (ult >> 2);
+        const RDPAddress textureStart = texture.address + bytesOffset + bytesPerRow * (ult >> 2);
         const uint32_t rowCount = 1 + ((lrt >> 2) - (ult >> 2));
         const uint32_t tileWidth = ((lrs >> 2) - (uls >> 2));
         const uint32_t wordsPerRow = (tileWidth >> (4 - t.siz)) + 1;
         const uint32_t textureSize = (rowCount - 1) * bytesPerRow + (wordsPerRow << 3);
 
-        // Hash the entire texture's memory along with the parameters that affect its format.
         XXH3_state_t xxh3;
         XXH3_64bits_reset(&xxh3);
+#ifdef HOST_ADDRESS
+        XXH3_64bits_update(&xxh3, reinterpret_cast<const uint8_t *>(textureStart), textureSize);
+#else
         XXH3_64bits_update(&xxh3, &state->RDRAM[textureStart], textureSize);
+#endif
         XXH3_64bits_update(&xxh3, &imageSiz, sizeof(imageSiz));
         XXH3_64bits_update(&xxh3, &imageFmt, sizeof(imageFmt));
         XXH3_64bits_update(&xxh3, &imageLoad, sizeof(imageLoad));

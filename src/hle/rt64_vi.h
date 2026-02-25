@@ -127,7 +127,7 @@ namespace RT64 {
         };
 
         Status status;
-        unsigned origin;
+        RDPAddress origin;
         unsigned width;
         unsigned intr;
         unsigned vCurrentLine;
@@ -142,7 +142,7 @@ namespace RT64 {
         YTransform yTransform;
 
         uint8_t fbSiz() const;
-        uint32_t fbAddress() const;
+        RDPAddress fbAddress() const;
         hlslpp::uint2 fbSize() const;
         float xScaleFloat() const;
         float xOffsetFloat() const;

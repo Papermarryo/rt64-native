@@ -75,6 +75,7 @@ namespace RT64 {
             uint32_t *DPC_TMEM_REG;
             uint32_t *VI_STATUS_REG;
             uint32_t *VI_ORIGIN_REG;
+            RDPAddress *VI_ORIGIN_PTR;
             uint32_t *VI_WIDTH_REG;
             uint32_t *VI_INTR_REG;
             uint32_t *VI_V_CURRENT_LINE_REG;
@@ -155,6 +156,7 @@ namespace RT64 {
         virtual ~Application();
         SetupResult setup(uint32_t threadId);
         void processDisplayLists(uint8_t *memory, uint32_t dlStartAddress, uint32_t dlEndAddress, bool isHLE);
+        void processDisplayLists(DisplayList *dlStart, DisplayList *dlEnd, bool isHLE);
         void updateScreen();
         void destroyShaderCache();
         void updateMultisampling();

@@ -9,7 +9,7 @@
 namespace RT64 {
     // RenderTargetKey
 
-    RenderTargetKey::RenderTargetKey(uint32_t address, uint32_t width, uint32_t siz, Framebuffer::Type fbType) {
+    RenderTargetKey::RenderTargetKey(RDPAddress address, uint32_t width, uint32_t siz, Framebuffer::Type fbType) {
         this->address = address;
         this->width = width;
         this->siz = siz;

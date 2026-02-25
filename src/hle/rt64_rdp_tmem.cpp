@@ -86,7 +86,7 @@ namespace RT64 {
 
         // Dump the RDRAM last loaded into the TMEM address pointed to by the tile. Required for generating hashes used by Rice.
         const LoadOperation &loadOp = state->rdp->rice.lastLoadOpByTMEM[loadTile.tmem];
-        uint32_t rdramStart = loadOp.texture.address;
+        RDPAddress rdramStart = loadOp.texture.address;
         uint32_t rdramCount = 0;
         uint32_t commonBytesOffset = (loadOp.tile.uls >> 2) << loadOp.texture.siz >> 1;
         uint32_t commonBytesPerRow = loadOp.texture.width << loadOp.texture.siz >> 1;
@@ -114,8 +114,13 @@ namespace RT64 {
             std::filesystem::path dumpRdramPath = state->dumpingTexturesDirectory / (std::string(baseName) + ".rice.rdram");
             std::ofstream dumpRdramStream(dumpRdramPath, std::ios::binary);
             if (dumpRdramStream.is_open()) {
+#ifdef HOST_ADDRESS
+                const char *rdramPtr = reinterpret_cast<const char *>(rdramStart);
+                dumpRdramStream.write(rdramPtr, rdramCount);
+#else
                 const char *RDRAM = reinterpret_cast<const char *>(state->RDRAM);
                 dumpRdramStream.write(&RDRAM[rdramStart], rdramCount);
+#endif
                 dumpRdramStream.close();
             }
 
@@ -140,14 +145,19 @@ namespace RT64 {
             uint32_t paletteBytesPerRow = paletteLoadOp.texture.width << paletteLoadOp.texture.siz >> 1;
             const uint32_t rowCount = 1 + ((paletteLoadOp.tile.lrt >> 2) - (paletteLoadOp.tile.ult >> 2));
             const uint32_t wordsPerRow = ((paletteLoadOp.tile.lrs >> 2) - (paletteLoadOp.tile.uls >> 2)) + 1;
-            uint32_t paletteRdramStart = paletteLoadOp.texture.address + paletteBytesOffset + paletteBytesPerRow * (paletteLoadOp.tile.ult >> 2);
+            RDPAddress paletteRdramStart = paletteLoadOp.texture.address + paletteBytesOffset + paletteBytesPerRow * (paletteLoadOp.tile.ult >> 2);
             uint32_t paletteRdramCount = (rowCount - 1) * paletteBytesPerRow + (wordsPerRow << 3);
             if (paletteRdramCount > 0) {
                 std::filesystem::path dumpPaletteRdramPath = state->dumpingTexturesDirectory / (std::string(baseName) + ".rice.palette.rdram");
                 std::ofstream dumpPaletteRdramStream(dumpPaletteRdramPath, std::ios::binary);
                 if (dumpPaletteRdramStream.is_open()) {
+#ifdef HOST_ADDRESS
+                    const char *palettePtr = reinterpret_cast<const char *>(paletteRdramStart);
+                    dumpPaletteRdramStream.write(palettePtr, paletteRdramCount);
+#else
                     const char *RDRAM = reinterpret_cast<const char *>(state->RDRAM);
                     dumpPaletteRdramStream.write(&RDRAM[paletteRdramStart], paletteRdramCount);
+#endif
                     dumpPaletteRdramStream.close();
                 }
             }

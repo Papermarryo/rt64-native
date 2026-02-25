@@ -912,8 +912,8 @@ namespace RT64 {
                 {
                     std::scoped_lock<std::mutex> managerLock(ext.sharedResources->managerMutex);
                     FramebufferManager &fbManager = ext.sharedResources->framebufferManager;
-                    std::vector<uint32_t> &colorVector = ext.sharedResources->colorImageAddressVector;
-                    std::unordered_set<uint32_t> &colorSet = ext.sharedResources->colorImageAddressSet;
+                    std::vector<RDPAddress> &colorVector = ext.sharedResources->colorImageAddressVector;
+                    std::unordered_set<RDPAddress> &colorSet = ext.sharedResources->colorImageAddressSet;
                     colorVector.clear();
                     colorSet.clear();
                     for (int32_t f = workload.fbPairCount - 1; f >= 0; f--) {

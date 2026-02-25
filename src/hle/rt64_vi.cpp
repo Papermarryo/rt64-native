@@ -90,10 +90,9 @@ namespace RT64 {
         }
     }
 
-    uint32_t VI::fbAddress() const {
+    RDPAddress VI::fbAddress() const {
         uint8_t siz = fbSiz();
-
-        // Estimate the origin is off by one or two rows.
+#ifndef HOST_ADDRESS
         if (siz >= G_IM_SIZ_16b) {
             const bool interlacedStep = status.serrate && (vCurrentLine & 0x1);
             const uint32_t rowBytes = width * (1U << (siz - 1));
@@ -103,7 +102,7 @@ namespace RT64 {
                 return origin - rowOffset;
             }
         }
-
+#endif
         return origin;
     }
 

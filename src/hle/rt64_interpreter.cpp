@@ -5,6 +5,7 @@
 #include "rt64_interpreter.h"
 
 #include <cassert>
+#include <cinttypes>
 
 //#define DUMP_DISPLAY_LISTS
 
@@ -49,11 +50,11 @@ namespace RT64 {
         }
     }
 
-    void Interpreter::processRDPLists(uint32_t dlStartAdddress, DisplayList *dlStart, DisplayList *dlEnd) {
+    void Interpreter::processRDPLists(DisplayList *dlStart, DisplayList *dlEnd) {
         state->dlCpuProfiler.start();
 
         // Update the state with the current display list address.
-        state->displayListAddress = dlStartAdddress;
+        state->displayListAddress = (uint32_t)(uintptr_t)dlStart;
         state->displayListCounter++;
 
         // Check RDRAM if required.
@@ -153,13 +154,13 @@ namespace RT64 {
         state->dlCpuProfiler.end();
     }
 
-    void Interpreter::processDisplayLists(uint32_t dlStartAdddress, DisplayList *dlStart) {
+    void Interpreter::processDisplayLists(DisplayList *dlStart) {
         assert(hleGBI != nullptr);
 
         state->dlCpuProfiler.start();
 
         // Update the state with the current display list address.
-        state->displayListAddress = dlStartAdddress;
+        state->displayListAddress = (uint32_t)(uintptr_t)dlStart;
         state->displayListCounter++;
 
         // Check RDRAM if required.
@@ -176,11 +177,150 @@ namespace RT64 {
                 extendedFunction(state, &dl);
             }
             else {
-                func = hleGBI->map[opCode];
-
 #       ifdef DUMP_DISPLAY_LISTS
-                RT64_LOG_PRINTF("0x%08X 0x%08X", dl->w0, dl->w1);
+                const char* opName = "Unknown";
+                if (hleGBI->ucode == GBIUCode::F3DEX2) {
+                    switch (opCode) {
+                        case 0x00: opName = "G_SPNOOP"; break;
+                        case 0x01: opName = "G_VTX"; break;
+                        case 0x02: opName = "G_MODIFYVTX"; break;
+                        case 0x03: opName = "G_CULLDL"; break;
+                        case 0x04: opName = "G_BRANCH_Z"; break;
+                        case 0x05: opName = "G_TRI1"; break;
+                        case 0x06: opName = "G_TRI2"; break;
+                        case 0x07: opName = "G_QUAD"; break;
+                        case 0x08: opName = "G_LINE3D"; break;
+                        case 0xD6: opName = "G_DMA_IO"; break;
+                        case 0xD7: opName = "G_TEXTURE"; break;
+                        case 0xD8: opName = "G_POPMTX"; break;
+                        case 0xD9: opName = "G_GEOMETRYMODE"; break;
+                        case 0xDA: opName = "G_MTX"; break;
+                        case 0xDB: opName = "G_MOVEWORD"; break;
+                        case 0xDC: opName = "G_MOVEMEM"; break;
+                        case 0xDD: opName = "G_LOAD_UCODE"; break;
+                        case 0xDE: opName = "G_DL"; break;
+                        case 0xDF: opName = "G_ENDDL"; break;
+                        case 0xE0: opName = "G_SPNOOP"; break;
+                        case 0xE1: opName = "G_RDPHALF_1"; break;
+                        case 0xE2: opName = "G_SETOTHERMODE_L"; break;
+                        case 0xE3: opName = "G_SETOTHERMODE_H"; break;
+                        case 0xE4: opName = "G_TEXRECT"; break;
+                        case 0xE5: opName = "G_TEXRECTFLIP"; break;
+                        case 0xE6: opName = "G_RDPLOADSYNC"; break;
+                        case 0xE7: opName = "G_RDPPIPESYNC"; break;
+                        case 0xE8: opName = "G_RDPTILESYNC"; break;
+                        case 0xE9: opName = "G_RDPFULLSYNC"; break;
+                        case 0xEA: opName = "G_SETKEYGB"; break;
+                        case 0xEB: opName = "G_SETKEYR"; break;
+                        case 0xEC: opName = "G_SETCONVERT"; break;
+                        case 0xED: opName = "G_SETSCISSOR"; break;
+                        case 0xEE: opName = "G_SETPRIMDEPTH"; break;
+                        case 0xEF: opName = "G_RDPSETOTHERMODE"; break;
+                        case 0xF0: opName = "G_LOADTLUT"; break;
+                        case 0xF1: opName = "G_RDPHALF_2"; break;
+                        case 0xF2: opName = "G_SETTILESIZE"; break;
+                        case 0xF3: opName = "G_LOADBLOCK"; break;
+                        case 0xF4: opName = "G_LOADTILE"; break;
+                        case 0xF5: opName = "G_SETTILE"; break;
+                        case 0xF6: opName = "G_FILLRECT"; break;
+                        case 0xF7: opName = "G_SETFILLCOLOR"; break;
+                        case 0xF8: opName = "G_SETFOGCOLOR"; break;
+                        case 0xF9: opName = "G_SETBLENDCOLOR"; break;
+                        case 0xFA: opName = "G_SETPRIMCOLOR"; break;
+                        case 0xFB: opName = "G_SETENVCOLOR"; break;
+                        case 0xFC: opName = "G_SETCOMBINE"; break;
+                        case 0xFD: opName = "G_SETTIMG"; break;
+                        case 0xFE: opName = "G_SETZIMG"; break;
+                        case 0xFF: opName = "G_SETCIMG"; break;
+                    }
+                } else if (hleGBI->ucode == GBIUCode::F3DEX) {
+                    switch (opCode) {
+                        case 0x00: opName = "G_SPNOOP"; break;
+                        case 0x01: opName = "G_MTX"; break;
+                        case 0x03: opName = "G_MOVEMEM"; break;
+                        case 0x04: opName = "G_VTX"; break;
+                        case 0x06: opName = "G_DL"; break;
+                        case 0xB0: opName = "G_BRANCH_Z"; break;
+                        case 0xB1: opName = "G_TRI2"; break;
+                        case 0xB2: opName = "G_MODIFYVTX"; break;
+                        case 0xB3: opName = "G_RDPHALF_2"; break;
+                        case 0xB4: opName = "G_RDPHALF_1"; break;
+                        case 0xBF: opName = "G_TRI1"; break;
+                        case 0xC0: opName = "G_NOOP"; break;
+                        case 0xE4: opName = "G_TEXRECT"; break;
+                        case 0xE5: opName = "G_TEXRECTFLIP"; break;
+                        case 0xE6: opName = "G_RDPLOADSYNC"; break;
+                        case 0xE7: opName = "G_RDPPIPESYNC"; break;
+                        case 0xE8: opName = "G_RDPTILESYNC"; break;
+                        case 0xE9: opName = "G_RDPFULLSYNC"; break;
+                        case 0xEA: opName = "G_SETKEYGB"; break;
+                        case 0xEB: opName = "G_SETKEYR"; break;
+                        case 0xEC: opName = "G_SETCONVERT"; break;
+                        case 0xED: opName = "G_SETSCISSOR"; break;
+                        case 0xEE: opName = "G_SETPRIMDEPTH"; break;
+                        case 0xEF: opName = "G_RDPSETOTHERMODE"; break;
+                        case 0xF0: opName = "G_LOADTLUT"; break;
+                        case 0xF2: opName = "G_SETTILESIZE"; break;
+                        case 0xF3: opName = "G_LOADBLOCK"; break;
+                        case 0xF4: opName = "G_LOADTILE"; break;
+                        case 0xF5: opName = "G_SETTILE"; break;
+                        case 0xF6: opName = "G_FILLRECT"; break;
+                        case 0xF7: opName = "G_SETFILLCOLOR"; break;
+                        case 0xF8: opName = "G_SETFOGCOLOR"; break;
+                        case 0xF9: opName = "G_SETBLENDCOLOR"; break;
+                        case 0xFA: opName = "G_SETPRIMCOLOR"; break;
+                        case 0xFB: opName = "G_SETENVCOLOR"; break;
+                        case 0xFC: opName = "G_SETCOMBINE"; break;
+                        case 0xFD: opName = "G_SETTIMG"; break;
+                        case 0xFE: opName = "G_SETZIMG"; break;
+                        case 0xFF: opName = "G_SETCIMG"; break;
+                    }
+                } else if (hleGBI->ucode == GBIUCode::F3D) {
+                    switch (opCode) {
+                        case 0x00: opName = "G_SPNOOP"; break;
+                        case 0x01: opName = "G_MTX"; break;
+                        case 0x03: opName = "G_MOVEMEM"; break;
+                        case 0x04: opName = "G_VTX"; break;
+                        case 0x06: opName = "G_DL"; break;
+                        case 0xBF: opName = "G_TRI1"; break;
+                        case 0xC0: opName = "G_NOOP"; break;
+                        case 0xE4: opName = "G_TEXRECT"; break;
+                        case 0xE5: opName = "G_TEXRECTFLIP"; break;
+                        case 0xE6: opName = "G_RDPLOADSYNC"; break;
+                        case 0xE7: opName = "G_RDPPIPESYNC"; break;
+                        case 0xE8: opName = "G_RDPTILESYNC"; break;
+                        case 0xE9: opName = "G_RDPFULLSYNC"; break;
+                        case 0xEA: opName = "G_SETKEYGB"; break;
+                        case 0xEB: opName = "G_SETKEYR"; break;
+                        case 0xEC: opName = "G_SETCONVERT"; break;
+                        case 0xED: opName = "G_SETSCISSOR"; break;
+                        case 0xEE: opName = "G_SETPRIMDEPTH"; break;
+                        case 0xEF: opName = "G_RDPSETOTHERMODE"; break;
+                        case 0xF0: opName = "G_LOADTLUT"; break;
+                        case 0xF2: opName = "G_SETTILESIZE"; break;
+                        case 0xF3: opName = "G_LOADBLOCK"; break;
+                        case 0xF4: opName = "G_LOADTILE"; break;
+                        case 0xF5: opName = "G_SETTILE"; break;
+                        case 0xF6: opName = "G_FILLRECT"; break;
+                        case 0xF7: opName = "G_SETFILLCOLOR"; break;
+                        case 0xF8: opName = "G_SETFOGCOLOR"; break;
+                        case 0xF9: opName = "G_SETBLENDCOLOR"; break;
+                        case 0xFA: opName = "G_SETPRIMCOLOR"; break;
+                        case 0xFB: opName = "G_SETENVCOLOR"; break;
+                        case 0xFC: opName = "G_SETCOMBINE"; break;
+                        case 0xFD: opName = "G_SETTIMG"; break;
+                        case 0xFE: opName = "G_SETZIMG"; break;
+                        case 0xFF: opName = "G_SETCIMG"; break;
+                    }
+                }
+
+                if (dl->w1 > 0xFFFFFFFF) {
+                    RT64_LOG_PRINTF("Command: %-17s (0x%02X): 0x%08X : 0x%016" PRIX64, opName, opCode, dl->w0, (uint64_t)dl->w1);
+                } else {
+                    RT64_LOG_PRINTF("Command: %-17s (0x%02X): 0x%08X : 0x%08X", opName, opCode, dl->w0, (uint32_t)dl->w1);
+                }
 #       endif
+                func = hleGBI->map[opCode];
 
                 if (func != nullptr) {
                     func(state, &dl);

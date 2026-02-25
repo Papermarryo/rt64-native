@@ -150,7 +150,7 @@ namespace RT64 {
             }
         };
 
-        std::unordered_map<uint32_t, Framebuffer> framebuffers;
+        std::unordered_map<RDPAddress, Framebuffer> framebuffers;
         std::unordered_map<uint64_t, TileCopy> tileCopies;
         std::unique_ptr<RenderTexture> dummyTLUTTexture;
         std::vector<std::unique_ptr<ReinterpretDescriptorSet>> descriptorReinterpretSets;
@@ -164,9 +164,9 @@ namespace RT64 {
 
         FramebufferManager();
         ~FramebufferManager();
-        Framebuffer &get(uint32_t address, uint8_t siz, uint32_t width, uint32_t height);
-        Framebuffer *find(uint32_t address) const;
-        Framebuffer *findMostRecentContaining(uint32_t addressStart, uint32_t addressEnd);
+        Framebuffer &get(RDPAddress address, uint8_t siz, uint32_t width, uint32_t height);
+        Framebuffer *find(RDPAddress address) const;
+        Framebuffer *findMostRecentContaining(RDPAddress addressStart, RDPAddress addressEnd);
         void writeChanges(RenderWorker *renderWorker, const FramebufferChangePool &fbChangePool, const FramebufferOperation &op, RenderTargetManager &targetManager, const ShaderLibrary *shaderLibrary);
         void clearUsedTileCopies();
         uint64_t findTileCopyId(uint32_t width, uint32_t height);
@@ -178,7 +178,7 @@ namespace RT64 {
         void reinterpretTileRecord(RenderWorker *renderWorker, const FramebufferOperation &op, TextureCache &textureCache, hlslpp::float2 resolutionScale,
             uint64_t submissionFrame, bool usesHDR, CommandListReinterpretations &cmdListReinterpretations);
 
-        bool makeFramebufferTile(Framebuffer *fb, uint32_t addressStart, uint32_t addressEnd, uint32_t lineWidth, uint32_t tileHeight, FramebufferTile &outTile, bool RGBA32);
+        bool makeFramebufferTile(Framebuffer *fb, RDPAddress addressStart, RDPAddress addressEnd, uint32_t lineWidth, uint32_t tileHeight, FramebufferTile &outTile, bool RGBA32);
 
         FramebufferOperation makeTileCopyTMEM(uint64_t dstTileId, const FramebufferTile &fbTile);
 
@@ -186,16 +186,16 @@ namespace RT64 {
             interop::uint2 texelShift, interop::uint2 texelMask, uint64_t tlutHash, uint32_t tlutFormat);
 
         CheckCopyResult checkTileCopyTMEM(uint32_t tmem, uint32_t lineWidth, uint8_t siz, uint8_t fmt, uint16_t uls);
-        void insertRegionsTMEM(uint32_t addressStart, uint32_t tmemStart, uint32_t tmemWords, uint32_t tmemMask, bool RGBA32, bool syncRequired, std::vector<RegionIterator> *resultRegions);
+        void insertRegionsTMEM(RDPAddress addressStart, uint32_t tmemStart, uint32_t tmemWords, uint32_t tmemMask, bool RGBA32, bool syncRequired, std::vector<RegionIterator> *resultRegions);
         void discardRegionsTMEM(uint32_t tmemStart, uint32_t tmemWords, uint32_t tmemMask);
         void storeRAM(FramebufferStorage &fbStorage, const uint8_t *RDRAM, uint32_t fbPairIndex);
         void checkRAM(const uint8_t *RDRAM, std::vector<Framebuffer *> &differentFbs, bool updateHashes);
         void uploadRAM(RenderWorker *renderWorker, Framebuffer **differentFbs, size_t differentFbsCount, FramebufferChangePool &fbChangePool, const uint8_t *RDRAM, bool canDiscard, std::vector<FramebufferOperation> &fbOps,
-            std::vector<uint32_t> &fbDiscards, const ShaderLibrary *shaderLibrary);
+            std::vector<RDPAddress> &fbDiscards, const ShaderLibrary *shaderLibrary);
 
         void resetTracking();
         void hashTracking(const uint8_t *RDRAM);
-        void changeRAM(Framebuffer *changedFb, uint32_t addressStart, uint32_t addressEnd);
+        void changeRAM(Framebuffer *changedFb, RDPAddress addressStart, RDPAddress addressEnd);
 
         void resetOperations();
 
@@ -205,12 +205,11 @@ namespace RT64 {
             const std::vector<FramebufferOperation> &operations, RenderTargetManager &targetManager, hlslpp::float2 resolutionScale, uint32_t maxFbPairIndex,
             uint64_t submissionFrame);
         
-        // Execution must finish before calling this again. A convenience function around reset, setup and record.
         void performOperations(RenderWorker *renderWorker, const FramebufferChangePool *fbChangePool, const FramebufferStorage *fbStorage, const ShaderLibrary *shaderLibrary, TextureCache *textureCache, 
             const std::vector<FramebufferOperation> &operations, RenderTargetManager &targetManager, hlslpp::float2 resolutionScale, uint32_t maxFbPairIndex,
             uint64_t submissionFrame, std::unordered_set<RenderTarget *> *resizedTargets = nullptr);
 
-        void performDiscards(const std::vector<uint32_t> &discards);
+        void performDiscards(const std::vector<RDPAddress> &discards);
 
         void destroyAllTileCopies();
         uint64_t nextWriteTimestamp();

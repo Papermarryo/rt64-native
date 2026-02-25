@@ -15,7 +15,7 @@
 #   include "res/bluenoise/LDR_64_64_64_RGB1.h"
 #endif
 
-//#define LOG_DISPLAY_LISTS
+// #define LOG_DISPLAY_LISTS
 
 namespace plume {
     // External functions to create the backends.
@@ -42,9 +42,19 @@ namespace RT64 {
     // Application::Core
 
     VI Application::Core::decodeVI() const {
-        VI vi;
+        VI vi = {};  // Zero-initialize the struct
         vi.status.word = *VI_STATUS_REG;
+#ifdef HOST_ADDRESS
+        if (VI_ORIGIN_PTR != nullptr) {
+            vi.origin = *VI_ORIGIN_PTR;
+        }
+        else {
+            printf("WARNING: VI_ORIGIN_PTR is nullptr, using fallback\n");
+            vi.origin = *VI_ORIGIN_REG;  // Use full value, not masked
+        }
+#else
         vi.origin = (*VI_ORIGIN_REG) & 0xFFFFFFU;
+#endif
         vi.width = (*VI_WIDTH_REG) & 0xFFFU;
         vi.intr = (*VI_INTR_REG) & 0x3FF;
         vi.vCurrentLine = (*VI_V_CURRENT_LINE_REG) & 0x3FF;
@@ -57,6 +67,7 @@ namespace RT64 {
         vi.vBurst.word = *VI_V_BURST_REG;
         vi.xTransform.word = *VI_X_SCALE_REG;
         vi.yTransform.word = *VI_Y_SCALE_REG;
+
         return vi;
     }
 
@@ -116,7 +127,7 @@ namespace RT64 {
 #   endif
 
         // Create the application window.
-        const char *windowTitle = "RT64";
+        const char *windowTitle = "Project Mache";
         appWindow = std::make_unique<ApplicationWindow>();
         if (core.window != RenderWindow{}) {
             appWindow->setup(core.window, this, threadId);
@@ -395,6 +406,12 @@ namespace RT64 {
     Application::~Application() {}
 
     void Application::processDisplayLists(uint8_t *memory, uint32_t dlStartAddress, uint32_t dlEndAddress, bool isHLE) {
+        DisplayList *dlStart = reinterpret_cast<DisplayList *>(&memory[dlStartAddress]);
+        DisplayList *dlEnd = (dlEndAddress > 0) ? reinterpret_cast<RT64::DisplayList *>(&memory[dlEndAddress]) : nullptr;
+        processDisplayLists(dlStart, dlEnd, isHLE);
+    }
+
+    void Application::processDisplayLists(DisplayList *dlStart, DisplayList *dlEnd, bool isHLE) {
         if (state->debuggerInspector.paused) {
             // TODO: It'd be necessary to parse the display list to see if it actually does a fullSync before sending the interrupt.
             state->dpInterrupt();
@@ -405,12 +422,10 @@ namespace RT64 {
             }
 
 #   ifdef LOG_DISPLAY_LISTS
-            RT64_LOG_PRINTF("Application::processDisplayLists(0x%X, 0x%X)", dlStartAddress, dlEndAddress);
+            RT64_LOG_PRINTF("Application::processDisplayLists(0x%p, 0x%p)", dlStart, dlEnd);
 #   endif
 
             ElapsedTimer displayListTimer;
-            DisplayList *dlStart = reinterpret_cast<DisplayList *>(&memory[dlStartAddress]);
-            DisplayList *dlEnd = (dlEndAddress > 0) ? reinterpret_cast<RT64::DisplayList *>(&memory[dlEndAddress]) : nullptr;
 
 #       if SCRIPT_ENABLED
             if (currentScript != nullptr) {
@@ -419,10 +434,10 @@ namespace RT64 {
 #       endif
 
             if (isHLE) {
-                interpreter->processDisplayLists(dlStartAddress, dlStart);
+                interpreter->processDisplayLists(dlStart);
             }
             else {
-                interpreter->processRDPLists(dlStartAddress, dlStart, dlEnd);
+                interpreter->processRDPLists(dlStart, dlEnd);
             }
         }
 

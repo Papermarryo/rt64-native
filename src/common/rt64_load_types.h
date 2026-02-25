@@ -6,6 +6,8 @@
 
 #include <json/json.hpp>
 
+#include "rt64_common.h"
+
 using json = nlohmann::json;
 
 namespace RT64 {
@@ -31,7 +33,7 @@ namespace RT64 {
     extern void from_json(const json &j, LoadTile &loadTile);
 
     struct LoadTexture {
-        uint32_t address;
+        RDPAddress address;
         uint8_t fmt;
         uint8_t siz;
         uint16_t width;

@@ -268,9 +268,9 @@ namespace RT64 {
         void popOtherMode();
         void setOtherModeL(uint32_t size, uint32_t off, uint32_t data);
         void setOtherModeH(uint32_t size, uint32_t off, uint32_t data);
-        void setColorImage(uint8_t fmt, uint8_t siz, uint16_t width, uint32_t segAddress);
-        void setDepthImage(uint32_t segAddress);
-        void setTextureImage(uint8_t fmt, uint8_t siz, uint16_t width, uint32_t segAddress);
+        void setColorImage(uint8_t fmt, uint8_t siz, uint16_t width, RDPAddress segAddress);
+        void setDepthImage(RDPAddress segAddress);
+        void setTextureImage(uint8_t fmt, uint8_t siz, uint16_t width, RDPAddress segAddress);
         void drawIndexedTri(uint32_t a, uint32_t b, uint32_t c, bool rawGlobalIndices);
         void drawIndexedTri(uint32_t a, uint32_t b, uint32_t c);
         void setViewportAlign(uint16_t ori, int16_t offx, int16_t offy);

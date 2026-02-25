@@ -54,11 +54,11 @@ namespace RT64 {
         return rowWidth << siz >> 1;
     }
 
-    bool Framebuffer::contains(uint32_t start, uint32_t end) const {
+    bool Framebuffer::contains(RDPAddress start, RDPAddress end) const {
         return (start >= addressStart) && (end <= addressEnd);
     }
 
-    bool Framebuffer::overlaps(uint32_t start, uint32_t end) const {
+    bool Framebuffer::overlaps(RDPAddress start, RDPAddress end) const {
         return (addressStart < end) && (addressEnd > start);
     }
 

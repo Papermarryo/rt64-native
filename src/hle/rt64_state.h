@@ -88,7 +88,7 @@ namespace RT64 {
         SpriteCommand activeSpriteCommand;
         bool addLightsOnFlush;
         std::vector<FramebufferOperation> drawFbOperations;
-        std::vector<uint32_t> drawFbDiscards;
+        std::vector<RDPAddress> drawFbDiscards;
         std::vector<DisplayList *> returnAddressStack;
         std::vector<Framebuffer *> differentFbs;
         GameConfiguration gameConfig;

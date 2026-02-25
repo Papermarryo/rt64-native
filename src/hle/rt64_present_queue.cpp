@@ -88,6 +88,12 @@ namespace RT64 {
 
         viRenderer = std::make_unique<VIRenderer>();
 
+#ifdef HOST_ADDRESS
+        // For PC ports using HOST_ADDRESS, always use RDRAM view since rendering
+        // is done by the CPU to the framebuffer memory, not by RT64's GPU pipeline.
+        viewRDRAM = true;
+#endif
+
         presentThreadRunning = true;
         presentThread = new std::thread(&PresentQueue::threadLoop, this);
     }
@@ -215,7 +221,7 @@ namespace RT64 {
                 }
             }
             else {
-                uint32_t fbAddress = present.screenVI.fbAddress();
+                RDPAddress fbAddress = present.screenVI.fbAddress();
 
                 // Use a scratch framebuffer to upload the RAM to the render target.
                 hlslpp::uint2 fbSize = present.screenVI.fbSize();

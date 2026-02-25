@@ -5,6 +5,7 @@
 #include "rt64_gbi_rdp.h"
 
 #include "../include/rt64_extended_gbi.h"
+#include "common/rt64_common.h"
 
 #include "rt64_f3d.h"
 
@@ -18,12 +19,12 @@ namespace RT64 {
             const uint8_t fmt = (*dl)->p0(21, 3);
             const uint8_t siz = (*dl)->p0(19, 2);
             const uint16_t width = (*dl)->p0(0, 12) + 1;
-            const uint32_t address = (*dl)->w1;
+            const RDPAddress address = static_cast<RDPAddress>((*dl)->w1);
             state->rdp->setColorImage(fmt, siz, width, address);
         }
 
         void setDepthImage(State *state, DisplayList **dl) {
-            const uint32_t address = (*dl)->w1;
+            const RDPAddress address = static_cast<RDPAddress>((*dl)->w1);
             state->rdp->setDepthImage(address);
         }
 
@@ -31,7 +32,7 @@ namespace RT64 {
             const uint8_t fmt = (*dl)->p0(21, 3);
             const uint8_t siz = (*dl)->p0(19, 2);
             const uint16_t width = (*dl)->p0(0, 12) + 1;
-            const uint32_t address = (*dl)->w1;
+            const RDPAddress address = static_cast<RDPAddress>((*dl)->w1);
             state->rdp->setTextureImage(fmt, siz, width, address);
         }
 

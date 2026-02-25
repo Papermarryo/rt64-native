@@ -29,20 +29,20 @@ namespace RT64 {
         w0 = w1 = 0;
     }
 
-    uint32_t DisplayList::p0(uint8_t pos, uint8_t bits) const {
-        return ((w0 >> pos) & ((0x01 << bits) - 1));
+    uint64_t DisplayList::p0(uint8_t pos, uint8_t bits) const {
+        return ((w0 >> pos) & ((0x01ULL << bits) - 1));
     }
 
-    uint32_t DisplayList::p1(uint8_t pos, uint8_t bits) const {
-        return ((w1 >> pos) & ((0x01 << bits) - 1));
+    uint64_t DisplayList::p1(uint8_t pos, uint8_t bits) const {
+        return ((w1 >> pos) & ((0x01ULL << bits) - 1));
     }
 
     // ****************************************************************************************
     // * Database of known GBI versions.                                                      *
     // ****************************************************************************************
-    // 
+    //
     //                  Constant                      Identifier                                   UCode                    LowP    NoN     ReJ     MVP     Point
-    // 
+    //
     const GBIInstance   F3D_SDK_E                 = { "2.0D, 04-01-96 (F3D SDK 2.0E)",             GBIUCode::F3D,         { false,  false,  false,  false,  false } }; // Needs confirmation.
     const GBIInstance   F3D_SDK_F                 = { "2.0D, 04-01-96 (F3D SDK 2.0F)",             GBIUCode::F3D,         { false,  false,  false,  false,  false } }; // Needs confirmation.
     const GBIInstance   F3D_SDK_UNKNOWN_G         = { "2.0G, 09-30-96 (F3D SDK Unknown)",          GBIUCode::F3D,         { false,  false,  false,  false,  false } }; // Needs confirmation.
@@ -157,9 +157,9 @@ namespace RT64 {
     // ****************************************************************************************
     // * Database of known UCode text and data segments.                                      *
     // ****************************************************************************************
-    // 
-    //                  Length      Hash                    Known instances               
-    //     
+    //
+    //                  Length      Hash                    Known instances
+    //
     static std::array<GBISegment, 94> textSegments = {
             GBISegment{ 0x1408,     0x9C0926F5E466BE70ULL,  { &F3D_SDK_E } }, // Needs confirmation.
             GBISegment{ 0x1400,     0x34EAA6E921BCF1B2ULL,  { &F3D_SDK_F, &F3D_SDK_UNKNOWN_G, &F3D_SDK_UNKNOWN_H } }, // Needs confirmation.
