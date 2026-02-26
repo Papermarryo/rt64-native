@@ -4,7 +4,7 @@
 
 #pragma once
 
-#if defined(_WIN32)
+#if defined(RT64_D3D12)
 
 #include <Windows.h>
 #include <dxcapi.h>

@@ -128,6 +128,8 @@ namespace RT64 {
     void RenderTarget::setupColorFramebuffer(RenderWorker *worker) {
         assert(worker != nullptr);
 
+        if (texture == nullptr) return;  // HOST_ADDRESS: texture may not have been created yet
+
         if (textureFramebuffer == nullptr) {
             const RenderTexture *colorTexture = texture.get();
             textureFramebuffer = worker->device->createFramebuffer(RenderFramebufferDesc(&colorTexture, 1));
@@ -159,6 +161,10 @@ namespace RT64 {
         assert(worker != nullptr);
         assert(src != nullptr);
         assert(format != src->format);
+
+        if (texture == nullptr || src->texture == nullptr) {
+            return;
+        }
 
         // Select shader based on the formats.
         RenderTextureLayout requiredTextureLayout = RenderTextureLayout::UNKNOWN;
@@ -217,6 +223,10 @@ namespace RT64 {
     void RenderTarget::resolveFromTarget(RenderWorker *worker, RenderTarget *src, const ShaderLibrary *shaderLibrary) {
         assert(!usesResolve() && "The target must not be an MSAA target to allow resolving from other targets.");
 
+        if (texture == nullptr || src->texture == nullptr) {
+            return;
+        }
+
         const bool hwResolve = shaderLibrary->usesHardwareResolve;
         RenderTextureBarrier resolveBarriers[] = {
             RenderTextureBarrier(src->texture.get(), hwResolve ? RenderTextureLayout::RESOLVE_SOURCE : RenderTextureLayout::SHADER_READ),
@@ -248,6 +258,11 @@ namespace RT64 {
     void RenderTarget::copyFromChanges(RenderWorker *worker, const FramebufferChange &fbChange, uint32_t fbWidth, uint32_t fbHeight, uint32_t rowStart, const ShaderLibrary *shaderLibrary) {
         assert(worker != nullptr);
         assert(fbChange.used);
+
+        // HOST_ADDRESS: texture may not have been created yet for this render target.
+        if (texture == nullptr) {
+            return;
+        }
 
         // Select shader based on the formats.
         RenderTextureLayout requiredTextureLayout = RenderTextureLayout::UNKNOWN;
@@ -325,6 +340,8 @@ namespace RT64 {
     void RenderTarget::clearColorTarget(RenderWorker *worker) {
         assert(worker != nullptr);
 
+        if (texture == nullptr) return;  // HOST_ADDRESS: texture may not exist
+
         setupColorFramebuffer(worker);
 
         worker->commandList->barriers(RenderBarrierStage::GRAPHICS, RenderTextureBarrier(texture.get(), RenderTextureLayout::COLOR_WRITE));
@@ -337,8 +354,10 @@ namespace RT64 {
     void RenderTarget::clearDepthTarget(RenderWorker *worker) {
         assert(worker != nullptr);
 
+        if (texture == nullptr) return;  // HOST_ADDRESS: texture may not exist
+
         setupDepthFramebuffer(worker);
-        
+
         RenderTextureBarrier clearBarriers[] = {
             RenderTextureBarrier(texture.get(), RenderTextureLayout::DEPTH_WRITE),
             RenderTextureBarrier(dummyTexture.get(), RenderTextureLayout::COLOR_WRITE)
@@ -353,6 +372,10 @@ namespace RT64 {
 
     void RenderTarget::downsampleTarget(RenderWorker *worker, const ShaderLibrary *shaderLibrary) {
         assert(worker != nullptr);
+
+        if (texture == nullptr) {
+            return;
+        }
 
         resolveTarget(worker, shaderLibrary);
 
@@ -409,6 +432,10 @@ namespace RT64 {
 
     void RenderTarget::resolveTarget(RenderWorker *worker, const ShaderLibrary *shaderLibrary) {
         if (!resolvedTextureDirty || !usesResolve()) {
+            return;
+        }
+
+        if (texture == nullptr) {
             return;
         }
 

@@ -19,12 +19,12 @@
 #include "imgui/backends/imgui_impl_vulkan.h"
 
 #if defined(_WIN32)
-#   include "imgui/backends/imgui_impl_dx12.h"
 #   include "imgui/backends/imgui_impl_win32.h"
 #   include "utf8conv/utf8conv.h"
 #endif
 
-#if defined(_WIN32)
+#ifdef RT64_D3D12
+#   include "imgui/backends/imgui_impl_dx12.h"
 #   include "plume_d3d12.h"
 #endif
 
@@ -88,7 +88,7 @@ namespace RT64 {
 
         switch (graphicsAPI) {
         case UserConfiguration::GraphicsAPI::D3D12: {
-#       ifdef _WIN32
+#       ifdef RT64_D3D12
             D3D12Device *interfaceDevice = static_cast<D3D12Device *>(device);
             RenderDescriptorRange descriptorRange(RenderDescriptorRangeType::TEXTURE, 0, 1);
             descriptorSet = interfaceDevice->createDescriptorSet(RenderDescriptorSetDesc(&descriptorRange, 1));
@@ -144,7 +144,7 @@ namespace RT64 {
     Inspector::~Inspector() {
         switch (graphicsAPI) {
         case UserConfiguration::GraphicsAPI::D3D12: {
-#       ifdef _WIN32
+#       ifdef RT64_D3D12
             ImGui_ImplDX12_Shutdown();
 #       else
             assert(false && "Unsupported Graphics API.");
@@ -196,7 +196,7 @@ namespace RT64 {
 
         switch (graphicsAPI) {
         case UserConfiguration::GraphicsAPI::D3D12: {
-#       ifdef _WIN32
+#       ifdef RT64_D3D12
             ImGui_ImplDX12_NewFrame();
 #       else
             assert(false && "Unsupported Graphics API.");
@@ -228,7 +228,7 @@ namespace RT64 {
         if (drawData != nullptr) {
             switch (graphicsAPI) {
             case UserConfiguration::GraphicsAPI::D3D12: {
-#       ifdef _WIN32
+#       ifdef RT64_D3D12
                 D3D12CommandList *interfaceCommandList = static_cast<D3D12CommandList *>(commandList);
                 interfaceCommandList->checkDescriptorHeaps();
                 ImGui_ImplDX12_RenderDrawData(drawData, interfaceCommandList->d3d);

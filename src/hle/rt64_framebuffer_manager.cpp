@@ -16,6 +16,13 @@
 #include "render/rt64_render_worker.h"
 
 namespace RT64 {
+
+#ifdef HOST_ADDRESS
+    static inline bool isValidHostPtr(RDPAddress addr) {
+        return addr > 0xFFFFFFFFULL && addr != (RDPAddress)(~0ULL);
+    }
+#endif
+
     static void fixSizeToMultiple(uint32_t &width, uint32_t &height) {
         const uint32_t SizeMultiple = 32;
         width = ((width + SizeMultiple - 1) / SizeMultiple) * SizeMultiple;
@@ -763,11 +770,14 @@ namespace RT64 {
         auto it = framebuffers.begin();
         while (it != framebuffers.end()) {
 #ifdef HOST_ADDRESS
-            const uint8_t *fbRAM = reinterpret_cast<const uint8_t *>(it->first);
+            if (isValidHostPtr(it->first)) {
+                const uint8_t *fbRAM = reinterpret_cast<const uint8_t *>(it->first);
+                fbStorage.store(fbPairIndex, it->first, fbRAM, it->second.RAMBytes);
+            }
 #else
             const uint8_t *fbRAM = &RDRAM[it->first];
-#endif
             fbStorage.store(fbPairIndex, it->first, fbRAM, it->second.RAMBytes);
+#endif
             it++;
         }
     }
@@ -779,16 +789,19 @@ namespace RT64 {
         auto it = framebuffers.begin();
         while (it != framebuffers.end()) {
 #ifdef HOST_ADDRESS
-            const uint8_t *fbRAM = reinterpret_cast<const uint8_t *>(it->first);
+            if (isValidHostPtr(it->first)) {
+                const uint8_t *fbRAM = reinterpret_cast<const uint8_t *>(it->first);
 #else
-            const uint8_t *fbRAM = &RDRAM[it->first];
+            {
+                const uint8_t *fbRAM = &RDRAM[it->first];
 #endif
-            uint64_t currentHash = XXH3_64bits(fbRAM, it->second.RAMBytes);
-            if (currentHash != it->second.RAMHash) {
-                differentFbs.push_back(&it->second);
+                uint64_t currentHash = XXH3_64bits(fbRAM, it->second.RAMBytes);
+                if (currentHash != it->second.RAMHash) {
+                    differentFbs.push_back(&it->second);
 
-                if (updateHashes) {
-                    it->second.RAMHash = currentHash;
+                    if (updateHashes) {
+                        it->second.RAMHash = currentHash;
+                    }
                 }
             }
 
@@ -808,6 +821,7 @@ namespace RT64 {
         for (size_t i = 0; i < differentFbsCount; i++) {
             Framebuffer *fb = differentFbs[i];
 #ifdef HOST_ADDRESS
+            if (!isValidHostPtr(fb->addressStart)) continue;
             const uint8_t *fbRAM = reinterpret_cast<const uint8_t *>(fb->addressStart);
 #else
             const uint8_t *fbRAM = &RDRAM[fb->addressStart];
@@ -851,7 +865,9 @@ namespace RT64 {
         while (it != framebuffers.end()) {
             if ((it->second.maxHeight > 0) && (it->second.RAMBytes > 0)) {
 #ifdef HOST_ADDRESS
-                it->second.RAMHash = XXH3_64bits(reinterpret_cast<const uint8_t *>(it->first), it->second.RAMBytes);
+                if (isValidHostPtr(it->first)) {
+                    it->second.RAMHash = XXH3_64bits(reinterpret_cast<const uint8_t *>(it->first), it->second.RAMBytes);
+                }
 #else
                 it->second.RAMHash = XXH3_64bits(&RDRAM[it->first], it->second.RAMBytes);
 #endif

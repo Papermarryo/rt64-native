@@ -16,7 +16,11 @@
 namespace RT64 {
     namespace GBI_F3D {
         void matrix(State *state, DisplayList **dl) {
+#ifdef HOST_ADDRESS
+            state->rsp->matrix((uintptr_t)(*dl)->w1, (*dl)->p0(16, 8));
+#else
             state->rsp->matrix((*dl)->w1, (*dl)->p0(16, 8));
+#endif
         }
 
         void popMatrix(State *state, DisplayList **dl) {
@@ -24,54 +28,67 @@ namespace RT64 {
                 state->rsp->popMatrix(1);
             }
         }
-        
+
         void moveMem(State *state, DisplayList **dl) {
             switch ((*dl)->p0(16, 8)) {
             case F3D_G_MV_VIEWPORT:
+#ifdef HOST_ADDRESS
+                state->rsp->setViewport((uintptr_t)(*dl)->w1);
+#else
                 state->rsp->setViewport((*dl)->w1);
+#endif
                 break;
             case F3D_G_MV_MATRIX_1:
+#ifdef HOST_ADDRESS
+                state->rsp->forceMatrix((uintptr_t)(*dl)->w1);
+#else
                 state->rsp->forceMatrix((*dl)->w1);
+#endif
                 *dl = *dl + 3;
                 break;
             case F3D_G_MV_L0:
-                state->rsp->setLight(0, (*dl)->w1);
-                break;
             case F3D_G_MV_L1:
-                state->rsp->setLight(1, (*dl)->w1);
-                break;
             case F3D_G_MV_L2:
-                state->rsp->setLight(2, (*dl)->w1);
-                break;
             case F3D_G_MV_L3:
-                state->rsp->setLight(3, (*dl)->w1);
-                break;
             case F3D_G_MV_L4:
-                state->rsp->setLight(4, (*dl)->w1);
-                break;
             case F3D_G_MV_L5:
-                state->rsp->setLight(5, (*dl)->w1);
-                break;
             case F3D_G_MV_L6:
-                state->rsp->setLight(6, (*dl)->w1);
-                break;
             case F3D_G_MV_L7:
-                state->rsp->setLight(7, (*dl)->w1);
+            {
+                int lightIndex = (*dl)->p0(16, 8) - F3D_G_MV_L0;
+#ifdef HOST_ADDRESS
+                state->rsp->setLight(lightIndex, (uintptr_t)(*dl)->w1);
+#else
+                state->rsp->setLight(lightIndex, (*dl)->w1);
+#endif
                 break;
+            }
             case F3D_G_MV_LOOKATX:
+#ifdef HOST_ADDRESS
+                state->rsp->setLookAt(0, (uintptr_t)(*dl)->w1);
+#else
                 state->rsp->setLookAt(0, (*dl)->w1);
+#endif
                 break;
             case F3D_G_MV_LOOKATY:
+#ifdef HOST_ADDRESS
+                state->rsp->setLookAt(1, (uintptr_t)(*dl)->w1);
+#else
                 state->rsp->setLookAt(1, (*dl)->w1);
+#endif
                 break;
             default:
                 assert(false && "Unimplemented move mem.");
                 break;
             }
         }
-        
+
         void vertex(State *state, DisplayList **dl) {
+#ifdef HOST_ADDRESS
+            state->rsp->setVertex((uintptr_t)(*dl)->w1, (*dl)->p0(20, 4) + 1, (*dl)->p0(16, 4));
+#else
             state->rsp->setVertex((*dl)->w1, (*dl)->p0(20, 4) + 1, (*dl)->p0(16, 4));
+#endif
         }
 
         void runDl(State *state, DisplayList **dl) {
@@ -80,6 +97,7 @@ namespace RT64 {
             }
 
 #ifdef HOST_ADDRESS
+            if ((*dl)->w1 == 0) { *dl = state->popReturnAddress(); return; }
             *dl = reinterpret_cast<DisplayList *>((*dl)->w1) - 1;
 #else
             const uint32_t rdramAddress = state->rsp->fromSegmentedMasked((*dl)->w1);

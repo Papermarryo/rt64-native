@@ -222,10 +222,16 @@ namespace RT64 {
 
     RDPAddress RDP::maskAddress(RDPAddress address) {
 #ifdef HOST_ADDRESS
+        // Case 1: 32-bit N64 address (upper 32 bits zero, bit 31 set for KSEG0/extended).
         if ((address & N64AddressMask) == 0 && (address & ExtendedMask) == ExtendedMask) {
             uint32_t offset = address & RDP_ADDRESS_MASK;
-            fprintf(stderr, "maskAddress N64->HOST: input=0x%lx, offset=0x%x, RDRAM=%p, result=%p\n",
-                    (unsigned long)address, offset, (void*)state->RDRAM, (void*)(state->RDRAM + offset));
+            return reinterpret_cast<RDPAddress>(state->RDRAM + offset);
+        }
+        // Case 2: Address outside valid user-space (bits 47+ set on x86-64).
+        // This catches garbled addresses from misaligned DL reads or byte-order issues.
+        // Zero out the upper bits and treat the lower 32 as an N64 RDRAM offset.
+        if (address > 0x0000FFFFFFFFFFFFULL) {
+            uint32_t offset = (uint32_t)address & RDP_ADDRESS_MASK;
             return reinterpret_cast<RDPAddress>(state->RDRAM + offset);
         }
         return address;
@@ -366,15 +372,17 @@ namespace RT64 {
             // Split the lower and upper half of the word into the lower and upper half of TMEM.
             const uint32_t UpperTMEM = (RDP_TMEM_BYTES >> 1);
 #ifdef HOST_ADDRESS
+            // Native port: texture data is in raw big-endian (from .z64 ROM), same as real N64 RDRAM.
+            // No ^ 3 byte swap needed (that's only for Mupen64Plus's LE-swapped RDRAM layout).
             const uint8_t *texturePtr = reinterpret_cast<const uint8_t *>(textureAddress);
-            TMEM[(tmemAddress + 0) ^ tmemXorMask] = texturePtr[(0 & offsetMask) ^ 3];
-            TMEM[(tmemAddress + 1) ^ tmemXorMask] = texturePtr[(1 & offsetMask) ^ 3];
-            TMEM[(tmemAddress + 2) ^ tmemXorMask] = texturePtr[(4 & offsetMask) ^ 3];
-            TMEM[(tmemAddress + 3) ^ tmemXorMask] = texturePtr[(5 & offsetMask) ^ 3];
-            TMEM[((tmemAddress + 0) ^ tmemXorMask) | UpperTMEM] = texturePtr[(2 & offsetMask) ^ 3];
-            TMEM[((tmemAddress + 1) ^ tmemXorMask) | UpperTMEM] = texturePtr[(3 & offsetMask) ^ 3];
-            TMEM[((tmemAddress + 2) ^ tmemXorMask) | UpperTMEM] = texturePtr[(6 & offsetMask) ^ 3];
-            TMEM[((tmemAddress + 3) ^ tmemXorMask) | UpperTMEM] = texturePtr[(7 & offsetMask) ^ 3];
+            TMEM[(tmemAddress + 0) ^ tmemXorMask] = texturePtr[0 & offsetMask];
+            TMEM[(tmemAddress + 1) ^ tmemXorMask] = texturePtr[1 & offsetMask];
+            TMEM[(tmemAddress + 2) ^ tmemXorMask] = texturePtr[4 & offsetMask];
+            TMEM[(tmemAddress + 3) ^ tmemXorMask] = texturePtr[5 & offsetMask];
+            TMEM[((tmemAddress + 0) ^ tmemXorMask) | UpperTMEM] = texturePtr[2 & offsetMask];
+            TMEM[((tmemAddress + 1) ^ tmemXorMask) | UpperTMEM] = texturePtr[3 & offsetMask];
+            TMEM[((tmemAddress + 2) ^ tmemXorMask) | UpperTMEM] = texturePtr[6 & offsetMask];
+            TMEM[((tmemAddress + 3) ^ tmemXorMask) | UpperTMEM] = texturePtr[7 & offsetMask];
 #else
             TMEM[(tmemAddress + 0) ^ tmemXorMask] = RDRAM[(textureAddress + (0 & offsetMask)) ^ 3];
             TMEM[(tmemAddress + 1) ^ tmemXorMask] = RDRAM[(textureAddress + (1 & offsetMask)) ^ 3];
@@ -389,9 +397,10 @@ namespace RT64 {
         else {
             // Copy the entire word.
 #ifdef HOST_ADDRESS
+            // Native port: no ^ 3 byte swap (data is big-endian from ROM, not Mupen-swapped).
             const uint8_t *texturePtr = reinterpret_cast<const uint8_t *>(textureAddress);
             for (uint32_t i = 0; i < 8; i++) {
-                TMEM[(tmemAddress + i) ^ tmemXorMask] = texturePtr[(i & offsetMask) ^ 3];
+                TMEM[(tmemAddress + i) ^ tmemXorMask] = texturePtr[i & offsetMask];
             }
 #else
             for (uint32_t i = 0; i < 8; i++) {
@@ -698,7 +707,9 @@ namespace RT64 {
         XXH3_state_t xxh3;
         XXH3_64bits_reset(&xxh3);
 #ifdef HOST_ADDRESS
-        XXH3_64bits_update(&xxh3, reinterpret_cast<const uint8_t *>(textureStart), textureSize);
+        if (textureStart > 0xFFFFFFFFULL && textureStart != (RDPAddress)(~0ULL)) {
+            XXH3_64bits_update(&xxh3, reinterpret_cast<const uint8_t *>(textureStart), textureSize);
+        }
 #else
         XXH3_64bits_update(&xxh3, &state->RDRAM[textureStart], textureSize);
 #endif

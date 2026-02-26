@@ -1204,4 +1204,123 @@ namespace RT64 {
             this->NoN = NoN;
         }
     }
+
+#ifdef HOST_ADDRESS
+    // ========================================================================
+    // HOST_ADDRESS overloads: accept native 64-bit pointers directly
+    // These bypass fromSegmented/fromRDRAM since pointers are already valid.
+    // ========================================================================
+
+    void RSP::setVertex(uintptr_t nativeAddress, uint8_t vtxCount, uint32_t dstIndex) {
+        if (nativeAddress == 0) return;
+        if ((dstIndex >= RSP_MAX_VERTICES) || ((dstIndex + vtxCount) > RSP_MAX_VERTICES)) {
+            assert(false && "Vertex indices are not valid. DL is possibly corrupted.");
+            return;
+        }
+
+        const Vertex *dlVerts = reinterpret_cast<const Vertex *>(nativeAddress);
+        memcpy(&vertices[dstIndex], dlVerts, sizeof(Vertex) * vtxCount);
+        setVertexCommon<true>(dstIndex, dstIndex + vtxCount);
+    }
+
+    void RSP::matrix(uintptr_t nativeAddress, uint8_t params) {
+        if (nativeAddress == 0) return;
+        const FixedMatrix *fixedMatrix = reinterpret_cast<const FixedMatrix *>(nativeAddress);
+        const hlslpp::float4x4 floatMatrix = fixedMatrix->toMatrix4x4();
+
+        hlslpp::float4x4 &viewMatrix = viewMatrixStack[projectionMatrixStackSize - 1];
+        hlslpp::float4x4 &projMatrix = projMatrixStack[projectionMatrixStackSize - 1];
+        hlslpp::float4x4 &viewProjMatrix = viewProjMatrixStack[projectionMatrixStackSize - 1];
+        uint32_t &projectionMatrixSegmentedAddress = projectionMatrixSegmentedAddressStack[projectionMatrixStackSize - 1];
+        uint32_t &projectionMatrixPhysicalAddress = projectionMatrixPhysicalAddressStack[projectionMatrixStackSize - 1];
+        if (params & projMask) {
+            if (params & loadMask) {
+                viewProjMatrix = floatMatrix;
+                if (isMatrixViewProj(floatMatrix)) {
+                    matrixDecomposeViewProj(floatMatrix, viewMatrix, projMatrix);
+                } else {
+                    projMatrix = floatMatrix;
+                    viewMatrix = hlslpp::float4x4::identity();
+                }
+            } else {
+                viewProjMatrix = hlslpp::mul(floatMatrix, viewProjMatrix);
+                if (isMatrixAffine(floatMatrix) && !isMatrixIdentity(floatMatrix)) {
+                    viewMatrix = hlslpp::mul(floatMatrix, viewMatrix);
+                } else {
+                    projMatrix = hlslpp::mul(floatMatrix, projMatrix);
+                }
+            }
+
+            projectionMatrixSegmentedAddress = (uint32_t)(nativeAddress & 0xFFFFFFFF);
+            projectionMatrixPhysicalAddress = projectionMatrixSegmentedAddress;
+            projectionMatrixChanged = true;
+            projectionMatrixInversed = false;
+        } else {
+            if ((params & pushMask) && (modelMatrixStackSize < RSP_MATRIX_STACK_SIZE)) {
+                modelMatrixStackSize++;
+                modelMatrixStack[modelMatrixStackSize - 1] = modelMatrixStack[modelMatrixStackSize - 2];
+            }
+
+            if (params & loadMask) {
+                modelMatrixStack[modelMatrixStackSize - 1] = floatMatrix;
+            } else {
+                modelMatrixStack[modelMatrixStackSize - 1] = hlslpp::mul(floatMatrix, modelMatrixStack[modelMatrixStackSize - 1]);
+            }
+
+            modelMatrixSegmentedAddressStack[modelMatrixStackSize - 1] = (uint32_t)(nativeAddress & 0xFFFFFFFF);
+            modelMatrixPhysicalAddressStack[modelMatrixStackSize - 1] = (uint32_t)(nativeAddress & 0xFFFFFFFF);
+        }
+
+        modelViewProjChanged = true;
+    }
+
+    void RSP::forceMatrix(uintptr_t nativeAddress) {
+        if (nativeAddress == 0) return;
+        const FixedMatrix *fixedMatrix = reinterpret_cast<const FixedMatrix *>(nativeAddress);
+        modelViewProjMatrix = fixedMatrix->toMatrix4x4();
+        modelViewProjInserted = true;
+        modelViewProjChanged = false;
+    }
+
+    void RSP::setViewport(uintptr_t nativeAddress) {
+        if (nativeAddress == 0) return;
+        setViewport(nativeAddress, extended.global.viewportOrigin, extended.global.viewportOffsetX, extended.global.viewportOffsetY);
+    }
+
+    void RSP::setViewport(uintptr_t nativeAddress, uint16_t ori, int16_t offx, int16_t offy) {
+        if (nativeAddress == 0) return;
+        const Vp_t *vp = reinterpret_cast<const Vp_t *>(nativeAddress);
+        interop::RSPViewport &viewport = viewportStack[viewportStackSize - 1];
+        // Native LE: vscale[0]=X, [1]=Y, [2]=Z, [3]=W (standard C array order)
+        viewport.scale.x = float(vp->vscale[0]) / 4.0f;
+        viewport.scale.y = float(vp->vscale[1]) / 4.0f;
+        viewport.scale.z = float(vp->vscale[2]) / DepthRange;
+        viewport.translate.x = float(state->rdp->movedFromOrigin(vp->vtrans[0], ori) + offx) / 4.0f;
+        viewport.translate.y = float(vp->vtrans[1] + offy) / 4.0f;
+        viewport.translate.z = float(vp->vtrans[2]) / DepthRange;
+        extended.viewportOrigin = ori;
+        viewportChanged = true;
+    }
+
+    void RSP::setLight(uint8_t index, uintptr_t nativeAddress) {
+        if (nativeAddress == 0) return;
+        assert((index >= 0) && (index <= RSP_MAX_LIGHTS));
+        const uint8_t *data = reinterpret_cast<const uint8_t *>(nativeAddress);
+        memcpy(&lights[index], data, sizeof(Light));
+        lightsChanged = true;
+    }
+
+    void RSP::setLookAt(uint8_t index, uintptr_t nativeAddress) {
+        if (nativeAddress == 0) return;
+        assert(index < 2);
+        const DirLight *dirLight = reinterpret_cast<const DirLight *>(nativeAddress);
+        auto &dstLookAt = (index == 1) ? lookAt.y : lookAt.x;
+        if ((dirLight->dirx != 0) || (dirLight->diry != 0) || (dirLight->dirz != 0)) {
+            dstLookAt = hlslpp::normalize(hlslpp::float3(float(dirLight->dirx), float(dirLight->diry), float(dirLight->dirz)));
+        } else {
+            dstLookAt = { 0.0f, 0.0f, 0.0f };
+        }
+        lookAtChanged = true;
+    }
+#endif // HOST_ADDRESS
 };

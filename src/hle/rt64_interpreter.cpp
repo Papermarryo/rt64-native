@@ -7,6 +7,11 @@
 #include <cassert>
 #include <cinttypes>
 
+#include "gbi/rt64_gbi_f3d.h"
+#include "gbi/rt64_gbi_f3dex.h"
+#include "gbi/rt64_gbi_f3dex2.h"
+#include "gbi/rt64_gbi_rdp.h"
+
 //#define DUMP_DISPLAY_LISTS
 
 namespace RT64 {
@@ -47,6 +52,34 @@ namespace RT64 {
             if (resetFunction != nullptr) {
                 resetFunction(state);
             }
+        }
+    }
+
+    void Interpreter::forceGBI(GBIUCode ucode, GBIFlags flags) {
+        GBI &gbi = gbiManager.gbiCache[uint32_t(ucode)];
+        if (gbi.ucode == GBIUCode::Unknown) {
+            gbi.ucode = ucode;
+            GBI_RDP::setup(&gbi, true);
+            switch (ucode) {
+            case GBIUCode::F3D:
+                GBI_F3D::setup(&gbi);
+                break;
+            case GBIUCode::F3DEX:
+                GBI_F3DEX::setup(&gbi);
+                break;
+            case GBIUCode::F3DEX2:
+                GBI_F3DEX2::setup(&gbi);
+                break;
+            default:
+                assert(false && "forceGBI: unsupported UCode");
+                break;
+            }
+        }
+
+        gbi.flags = flags;
+        hleGBI = &gbi;
+        if (state != nullptr) {
+            state->rsp->setGBI(hleGBI);
         }
     }
 

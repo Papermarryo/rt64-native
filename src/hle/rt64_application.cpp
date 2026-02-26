@@ -19,7 +19,9 @@
 
 namespace plume {
     // External functions to create the backends.
+#ifdef RT64_D3D12
     extern std::unique_ptr<RenderInterface> CreateD3D12Interface();
+#endif
     extern std::unique_ptr<RenderInterface> CreateMetalInterface();
 #ifdef RT64_SDL_WINDOW_VULKAN
     extern std::unique_ptr<RenderInterface> CreateVulkanInterface(RenderWindow renderWindow);
@@ -145,7 +147,7 @@ namespace RT64 {
         // Create a render interface with the preferred backend.
         switch (chosenGraphicsAPI) {
         case UserConfiguration::GraphicsAPI::D3D12:
-#       ifdef _WIN64
+#       ifdef RT64_D3D12
             renderInterface = CreateD3D12Interface();
             break;
 #       else

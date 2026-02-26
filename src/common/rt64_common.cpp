@@ -123,6 +123,10 @@ namespace RT64 {
     // FixedMatrix
 
     float FixedMatrix::toFloat(uint32_t i, uint32_t j) const {
+        // guMtxF2L packs two int16 per 32-bit word: (e1<<16 | e2).
+        // On LE, int16_t[j] reads low half (e2) for even j, high half (e1) for odd j.
+        // XOR j^1 corrects the column order for both Mupen and native ports,
+        // because both use the same N64 SDK Mtx packing format.
         const int xorJ = j ^ 1;
         return FixedMatrix::fixedToFloat(integer[i][xorJ], frac[i][xorJ]);
     }

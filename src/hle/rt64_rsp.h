@@ -34,6 +34,35 @@ namespace RT64 {
 
     struct RSP {
         struct Vertex {
+#ifdef HOST_ADDRESS
+            // Native little-endian layout matching N64 SDK Vtx_t:
+            //   short ob[3] = {x, y, z}; unsigned short flag; short tc[2] = {s, t}; uchar cn[4]
+            int16_t x;
+            int16_t y;
+
+            int16_t z;
+            uint16_t flag;
+
+            int16_t s;
+            int16_t t;
+
+            union {
+                struct {
+                    uint8_t r;
+                    uint8_t g;
+                    uint8_t b;
+                    uint8_t a;
+                } color;
+
+                struct {
+                    int8_t x;
+                    int8_t y;
+                    int8_t z;
+                    int8_t a;
+                } normal;
+            };
+#else
+            // Mupen64Plus LE RDRAM layout (16-bit values swapped within 32-bit words)
             int16_t y;
             int16_t x;
 
@@ -58,21 +87,36 @@ namespace RT64 {
                     int8_t x;
                 } normal;
             };
+#endif
         };
 
         struct VertexPD {
+#ifdef HOST_ADDRESS
+            int16_t x, y;
+            int16_t z;
+            uint16_t ci;
+            int16_t s, t;
+#else
             int16_t y, x;
             uint16_t ci;
             int16_t z;
             int16_t t, s;
+#endif
         };
 
         struct VertexEXV1 {
             Vertex v;
+#ifdef HOST_ADDRESS
+            int16_t xp;
+            int16_t yp;
+            int16_t zp;
+            uint16_t pad;
+#else
             int16_t yp;
             int16_t xp;
             uint16_t pad;
             int16_t zp;
+#endif
         };
 
         struct RawLight {
@@ -80,6 +124,22 @@ namespace RT64 {
         };
 
         struct PosLight {
+#ifdef HOST_ADDRESS
+            // Native LE layout
+            uint8_t colr;
+            uint8_t colg;
+            uint8_t colb;
+            uint8_t kc;
+            uint8_t colcr;
+            uint8_t colcg;
+            uint8_t colcb;
+            uint8_t kl;
+            int16_t posx;
+            int16_t posy;
+            int16_t posz;
+            uint8_t kq;
+            uint8_t reserved1;
+#else
             uint8_t kc;
             uint8_t colb;
             uint8_t colg;
@@ -93,9 +153,25 @@ namespace RT64 {
             uint8_t reserved1;
             uint8_t kq;
             int16_t posz;
+#endif
         };
 
         struct DirLight {
+#ifdef HOST_ADDRESS
+            // Native LE layout
+            uint8_t colr;
+            uint8_t colg;
+            uint8_t colb;
+            uint8_t pad1;
+            uint8_t colcr;
+            uint8_t colcg;
+            uint8_t colcb;
+            uint8_t pad2;
+            int8_t dirx;
+            int8_t diry;
+            int8_t dirz;
+            uint8_t pad3;
+#else
             uint8_t pad1;
             uint8_t colb;
             uint8_t colg;
@@ -108,6 +184,7 @@ namespace RT64 {
             int8_t dirz;
             int8_t diry;
             int8_t dirx;
+#endif
         };
 
         union Light {
@@ -239,6 +316,16 @@ namespace RT64 {
         void setVertexPD(uint32_t address, uint8_t vtxCount, uint32_t dstIndex);
         void setVertexEXV1(uint32_t address, uint8_t vtxCount, uint32_t dstIndex);
         void setVertexColorPD(uint32_t address);
+#ifdef HOST_ADDRESS
+        // Native pointer overloads: accept full 64-bit pointers from display list w1
+        void setVertex(uintptr_t nativeAddress, uint8_t vtxCount, uint32_t dstIndex);
+        void matrix(uintptr_t nativeAddress, uint8_t params);
+        void forceMatrix(uintptr_t nativeAddress);
+        void setViewport(uintptr_t nativeAddress);
+        void setViewport(uintptr_t nativeAddress, uint16_t ori, int16_t offx, int16_t offy);
+        void setLight(uint8_t index, uintptr_t nativeAddress);
+        void setLookAt(uint8_t index, uintptr_t nativeAddress);
+#endif
         template<bool addEmptyVelocity>
         void setVertexCommon(uint8_t dstIndex, uint8_t dstMax);
         void modifyVertex(uint16_t dstIndex, uint16_t dstAttribute, uint32_t value);

@@ -19,7 +19,7 @@
 #include "shaders/PostBlendDitherNoiseAddPS.hlsl.spirv.h"
 #include "shaders/PostBlendDitherNoiseSubPS.hlsl.spirv.h"
 #include "shaders/PostBlendDitherNoiseSubNegativePS.hlsl.spirv.h"
-#ifdef _WIN32
+#ifdef RT64_D3D12
 #   include "shaders/RasterPSLibrary.hlsl.dxil.h"
 #   include "shaders/RasterPSLibraryMS.hlsl.dxil.h"
 #   include "shaders/RasterVSLibrary.hlsl.dxil.h"
@@ -177,7 +177,7 @@ namespace RT64 {
 #       endif
         }
         else {
-#       if defined(_WIN32)
+#       if defined(RT64_D3D12)
             RasterShaderText shaderText = generateShaderText(desc, useMSAA);
 
             // Compile both shaders from text with the constants hard-coded in.
@@ -395,7 +395,7 @@ namespace RT64 {
 
     // RasterShaderUber
 
-#if defined(_WIN32)
+#if defined(RT64_D3D12)
     const uint64_t RasterShaderUber::RasterVSLibraryHash = XXH3_64bits(RasterVSLibraryBlobDXIL, sizeof(RasterVSLibraryBlobDXIL));
     const uint64_t RasterShaderUber::RasterPSLibraryHash = XXH3_64bits(RasterPSLibraryBlobDXIL, sizeof(RasterPSLibraryBlobDXIL));
 #else
@@ -414,7 +414,7 @@ namespace RT64 {
         uint32_t PSBlobSize = 0;
         const bool useMSAA = (multisampling.sampleCount > 1);
         switch (shaderFormat) {
-#   ifdef _WIN32
+#   ifdef RT64_D3D12
         case RenderShaderFormat::DXIL:
             VSBlob = RasterVSDynamicBlobDXIL;
             PSBlob = useMSAA ? RasterPSDynamicMSBlobDXIL : RasterPSDynamicBlobDXIL;
@@ -495,7 +495,7 @@ namespace RT64 {
         std::unique_ptr<RenderShader> postBlendSubPixelShader;
         std::unique_ptr<RenderShader> postBlendSubNegativePixelShader;
         switch (shaderFormat) {
-#   ifdef _WIN32
+#   ifdef RT64_D3D12
         case RenderShaderFormat::DXIL:
             postBlendAddPixelShader = device->createShader(PostBlendDitherNoiseAddPSBlobDXIL, std::size(PostBlendDitherNoiseAddPSBlobDXIL), "PSMain", shaderFormat);
             postBlendSubPixelShader = device->createShader(PostBlendDitherNoiseSubPSBlobDXIL, std::size(PostBlendDitherNoiseSubPSBlobDXIL), "PSMain", shaderFormat);

@@ -3,7 +3,7 @@
 // RT64
 //
 
-#if defined(_WIN32)
+#if defined(RT64_D3D12)
 
 #include "rt64_shader_compiler.h"
 

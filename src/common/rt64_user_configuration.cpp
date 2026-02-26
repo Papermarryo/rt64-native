@@ -126,7 +126,7 @@ namespace RT64 {
     }
 
     bool UserConfiguration::isGraphicsAPISupported(GraphicsAPI graphicsAPI) {
-#   if defined(_WIN32)
+#   if defined(RT64_D3D12)
         if (graphicsAPI == GraphicsAPI::Metal) {
 #   elif defined(__APPLE__)
         if (graphicsAPI == GraphicsAPI::D3D12) {
@@ -141,8 +141,8 @@ namespace RT64 {
 
     UserConfiguration::GraphicsAPI UserConfiguration::resolveGraphicsAPI(GraphicsAPI graphicsAPI) {
         if (graphicsAPI == UserConfiguration::GraphicsAPI::Automatic) {
-#       if defined(_WIN64)
-            // Change the default graphics API when running under Wine to avoid using the D3D12 translation layer when possible. Recreate the default user configuration right afterwards so this new value is assigned.
+#       if defined(RT64_D3D12)
+            // Change the default graphics API when running under Wine to avoid using the D3D12 translation layer when possible.
             return Sommelier::detectWine() ? UserConfiguration::GraphicsAPI::Vulkan : UserConfiguration::GraphicsAPI::D3D12;
 #       elif defined(__APPLE__)
             return UserConfiguration::GraphicsAPI::Metal;

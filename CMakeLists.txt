@@ -13,6 +13,13 @@ option(RT64_STATIC "Build RT64 as a static library" OFF)
 
 option(RT64_SDL_WINDOW_VULKAN "Build RT64 to expect an SDL Window outside of Windows" OFF)
 
+# D3D12 backend: only enable by default for MSVC on Windows
+if(WIN32 AND MSVC)
+    option(RT64_D3D12 "Enable D3D12 graphics backend" ON)
+else()
+    option(RT64_D3D12 "Enable D3D12 graphics backend" OFF)
+endif()
+
 if (NOT ${RT64_STATIC})
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
@@ -70,6 +77,8 @@ add_subdirectory(src/tools/file_to_c)
 add_subdirectory(src/contrib/re-spirv)
 add_subdirectory(src/contrib/nativefiledialog-extended)
 add_subdirectory(src/contrib/zstd/build/cmake)
+# Pass D3D12 option to Plume
+set(PLUME_D3D12 ${RT64_D3D12} CACHE BOOL "" FORCE)
 add_subdirectory(src/contrib/plume)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
@@ -160,8 +169,8 @@ function(build_shader TARGETOBJ SHADERNAME OPTIONS)
     cmake_path(GET OUTNAME STEM TARGET_NAME)
     cmake_path(GET OUTNAME PARENT_PATH OUTPUT_DIR)
     file(MAKE_DIRECTORY ${OUTPUT_DIR})
-    # Compile DXIL shader binaries if building on Windows
-    if (WIN32)
+    # Compile DXIL shader binaries if D3D12 backend is enabled
+    if (RT64_D3D12)
         build_shader_dxil_impl(${TARGETOBJ} ${FILENAME} ${TARGET_NAME} ${OUTNAME} ${OPTIONS} ${EXTRA_ARGS})
     endif()
     # Compile Metal shader binaries if building on macOS
@@ -291,6 +300,10 @@ add_compile_definitions(
     IMGUI_IMPL_VULKAN_NO_PROTOTYPES
     HOST_ADDRESS
 )
+
+if (RT64_D3D12)
+    add_compile_definitions(RT64_D3D12)
+endif()
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux" AND RT64_SDL_WINDOW_VULKAN)
     add_compile_definitions("SDL_VULKAN_ENABLED")
@@ -451,19 +464,25 @@ if (APPLE)
 endif()
 
 # Add any Windows-specific source files and libraries
-if (WIN32)
+if (RT64_D3D12)
     target_sources(rt64 PRIVATE
         "${PROJECT_SOURCE_DIR}/src/contrib/imgui/backends/imgui_impl_dx12.cpp"
-        "${PROJECT_SOURCE_DIR}/src/contrib/imgui/backends/imgui_impl_win32.cpp"
     )
     target_link_libraries(rt64
         delayimp.lib
         D3D12
         DXGI
-        Shcore.lib
         ${PROJECT_SOURCE_DIR}/src/contrib/dxc/lib/x64/dxcompiler.lib)
+endif()
 
+if (WIN32)
+    target_sources(rt64 PRIVATE
+        "${PROJECT_SOURCE_DIR}/src/contrib/imgui/backends/imgui_impl_win32.cpp"
+    )
+    target_link_libraries(rt64 shcore dwmapi)
     target_include_directories(rt64 PRIVATE ${zstd_SOURCE_DIR}/lib)
+
+    # DXC is not needed at runtime for Vulkan-only (SPIR-V precompiled at build time)
 endif()
 
 target_link_directories(rt64 PRIVATE ${PROJECT_SOURCE_DIR}/src/contrib/dxc)
@@ -482,7 +501,7 @@ endif()
 
 preprocess_shader(rt64 "src/shaders/RenderParams.hlsli")
 
-if (${WIN32})
+if (RT64_D3D12)
     build_library_shader(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/RasterPSLibrary.hlsl")
     build_library_shader(rt64 "src/shaders/RasterPS.hlsl" "src/shaders/RasterPSLibraryMS.hlsl" "-D MULTISAMPLING")
     build_library_shader(rt64 "src/shaders/RasterVS.hlsl" "src/shaders/RasterVSLibrary.hlsl")

@@ -37,19 +37,35 @@ namespace RT64 {
             uint8_t index = (*dl)->p0(0, 8);
             switch (index) {
             case F3DEX2_G_MV_VIEWPORT:
+#ifdef HOST_ADDRESS
+                state->rsp->setViewport((uintptr_t)(*dl)->w1);
+#else
                 state->rsp->setViewport((*dl)->w1);
+#endif
                 break;
             case F3DEX2_G_MV_MATRIX:
+#ifdef HOST_ADDRESS
+                state->rsp->forceMatrix((uintptr_t)(*dl)->w1);
+#else
                 state->rsp->forceMatrix((*dl)->w1);
+#endif
                 break;
             case F3DEX2_G_MV_LIGHT: {
                 uint8_t offset = (*dl)->p0(8, 8) * 8;
                 int index = (offset / 24);
                 if (index >= 2) {
+#ifdef HOST_ADDRESS
+                    state->rsp->setLight(index - 2, (uintptr_t)(*dl)->w1);
+#else
                     state->rsp->setLight(index - 2, (*dl)->w1);
+#endif
                 }
                 else {
+#ifdef HOST_ADDRESS
+                    state->rsp->setLookAt(index, (uintptr_t)(*dl)->w1);
+#else
                     state->rsp->setLookAt(index, (*dl)->w1);
+#endif
                 }
 
                 break;
@@ -94,7 +110,11 @@ namespace RT64 {
         }
 
         void matrix(State *state, DisplayList **dl) {
+#ifdef HOST_ADDRESS
+            state->rsp->matrix((uintptr_t)(*dl)->w1, (*dl)->p0(0, 8) ^ state->rsp->pushMask);
+#else
             state->rsp->matrix((*dl)->w1, (*dl)->p0(0, 8) ^ state->rsp->pushMask);
+#endif
         }
 
         void popMatrix(State *state, DisplayList **dl) {
@@ -137,7 +157,11 @@ namespace RT64 {
 
         void vertex(State *state, DisplayList **dl) {
             uint8_t vtxCount = (*dl)->p0(12, 8);
+#ifdef HOST_ADDRESS
+            state->rsp->setVertex((uintptr_t)(*dl)->w1, vtxCount, (*dl)->p0(1, 7) - vtxCount);
+#else
             state->rsp->setVertex((*dl)->w1, vtxCount, (*dl)->p0(1, 7) - vtxCount);
+#endif
         }
 
         void tri1(State *state, DisplayList **dl) {

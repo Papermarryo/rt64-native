@@ -53,7 +53,7 @@
 #include "shaders/Im3DPS.hlsl.spirv.h"
 #include "shaders/PostProcessPS.hlsl.spirv.h"
 
-#ifdef _WIN32
+#ifdef RT64_D3D12
 #   include "shaders/FbChangesClearCS.hlsl.dxil.h"
 #   include "shaders/FbChangesDrawColorPS.hlsl.dxil.h"
 #   include "shaders/FbChangesDrawDepthPS.hlsl.dxil.h"
@@ -153,7 +153,7 @@
 #include "rt64_descriptor_sets.h"
 #include "rt64_render_target.h"
 
-#ifdef _WIN32
+#ifdef RT64_D3D12
 #   define CREATE_SHADER_INPUTS(DXIL_BLOB, SPIRV_BLOB, MSL_BLOB, ENTRY_NAME, SHADER_FORMAT)\
         (SHADER_FORMAT == RenderShaderFormat::DXIL) ? DXIL_BLOB : (SHADER_FORMAT == RenderShaderFormat::SPIRV) ? SPIRV_BLOB : nullptr,\
         (SHADER_FORMAT == RenderShaderFormat::DXIL) ? sizeof(DXIL_BLOB) : (SHADER_FORMAT == RenderShaderFormat::SPIRV) ? sizeof(SPIRV_BLOB) : 0,\
@@ -645,7 +645,7 @@ namespace RT64 {
         uint32_t RtCopyDepthToColorPSMSBlobSize = 0;
         uint32_t RtCopyColorToDepthPSBlobSize = 0;
         uint32_t RtCopyColorToDepthPSMSBlobSize = 0;
-#   ifdef _WIN32
+#   ifdef RT64_D3D12
         if (shaderFormat == RenderShaderFormat::DXIL) {
             RtCopyDepthToColorPSBlob = RtCopyDepthToColorPSBlobDXIL;
             RtCopyDepthToColorPSBlobSize = std::size(RtCopyDepthToColorPSBlobDXIL);

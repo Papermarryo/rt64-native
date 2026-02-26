@@ -20,6 +20,12 @@ namespace RT64 {
     }
 
     void FramebufferStorage::store(uint32_t fbPairIndex, RDPAddress address, const uint8_t *data, uint32_t size) {
+#ifdef HOST_ADDRESS
+        // Validate pointer before memcpy in native port mode.
+        if (data == nullptr || size == 0 || size > 0x800000) {
+            return;
+        }
+#endif
         uint32_t dstIndex = rdramUsed;
         rdramUsed += size;
         if (rdramUsed > rdramData.size()) {

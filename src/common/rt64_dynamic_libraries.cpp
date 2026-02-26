@@ -16,8 +16,16 @@ namespace RT64 {
     typedef std::pair<std::string, bool> NameRequiredPair;
     
     const auto DynamicLibraryList = {
+#   ifdef RT64_D3D12
         NameRequiredPair("dxil.dll", true),
+#   else
+        NameRequiredPair("dxil.dll", false),       // Only required for D3D12 DXIL validation
+#   endif
+#   ifdef RT64_D3D12
         NameRequiredPair("dxcompiler.dll", true),
+#   else
+        NameRequiredPair("dxcompiler.dll", false),  // Not needed for Vulkan-only (SPIR-V precompiled at build time)
+#   endif
 #   if DLSS_ENABLED
         NameRequiredPair("nvngx_dlssd.dll", false),
 #   endif
