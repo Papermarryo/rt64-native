@@ -57,6 +57,7 @@ namespace RT64 {
         Timestamp presentTimestamp;
         VIHistory viHistory;
         bool presentWaitEnabled = false;
+        std::atomic<RenderTexture*> currentSwapChainTexture{nullptr};
 
         PresentQueue();
         ~PresentQueue();

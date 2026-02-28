@@ -310,6 +310,7 @@ namespace RT64 {
             if (presentFrame && swapChainValid) {
                 // Draw the framebuffer with the VI renderer.
                 RenderTexture *swapChainTexture = ext.swapChain->getTexture(swapChainIndex);
+                currentSwapChainTexture.store(swapChainTexture, std::memory_order_relaxed);
                 RenderFramebuffer *swapChainFramebuffer = swapChainFramebuffers[swapChainIndex].get();
                 RenderCommandList *commandList = ext.presentGraphicsWorker->commandList.get();
                 commandList->begin();
